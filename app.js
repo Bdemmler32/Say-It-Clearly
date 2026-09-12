@@ -169,6 +169,7 @@ function recordMissedWord(word) {
   state.missedWords.add(word);
   persistMissedWords();
   updatePracticeFabBadge();
+  updateMissedTabLabel();
 }
 
 function updatePracticeFabBadge() {
@@ -202,6 +203,7 @@ const el = {
   definitionPanel: document.getElementById('definitionPanel'),
   definitionWord: document.getElementById('definitionWord'),
   definitionText: document.getElementById('definitionText'),
+  definitionClose: document.getElementById('definitionClose'),
   noSupportMsg: document.getElementById('noSupportMsg'),
   resultBanner: document.getElementById('resultBanner'),
   skipBtn: document.getElementById('skipBtn'),
@@ -218,6 +220,12 @@ const el = {
   randomPrevBtn: document.getElementById('randomPrevBtn'),
   randomNextBtn: document.getElementById('randomNextBtn'),
   randomBackBtn: document.getElementById('randomBackBtn'),
+  tabCards: document.getElementById('tabCards'),
+  tabMissed: document.getElementById('tabMissed'),
+  cardsView: document.getElementById('cardsView'),
+  missedView: document.getElementById('missedView'),
+  missedList: document.getElementById('missedList'),
+  missedEmpty: document.getElementById('missedEmpty'),
   randomMicBtn: document.getElementById('randomMicBtn'),
   randomMicStatus: document.getElementById('randomMicStatus'),
   randomMicArea: document.getElementById('randomMicArea'),
@@ -225,6 +233,7 @@ const el = {
   randomDefinitionPanel: document.getElementById('randomDefinitionPanel'),
   randomDefinitionWord: document.getElementById('randomDefinitionWord'),
   randomDefinitionText: document.getElementById('randomDefinitionText'),
+  randomDefinitionClose: document.getElementById('randomDefinitionClose'),
   randomResultBanner: document.getElementById('randomResultBanner'),
   randomNoSupportMsg: document.getElementById('randomNoSupportMsg'),
   filterRow: document.getElementById('filterRow'),
@@ -453,28 +462,26 @@ function clearIncorrectTimer() {
 
 // Native text-to-speech for the "Hear it" pronunciation hint and for
 // tap-to-hear in Practice — no external service, just the browser's
-// built-in SpeechSynthesis. Guards against a common browser quirk where
-// calling speak() immediately after cancel() silently does nothing.
+// built-in SpeechSynthesis.
+//
+// IMPORTANT: on mobile Safari/Chrome, speak() only works if it's called
+// synchronously inside the click/tap handler — any setTimeout/await in
+// between breaks the "user gesture" chain and the browser silently
+// swallows the audio. So this stays fully synchronous; the only async
+// thing is the onerror callback for genuine playback errors.
 function speak(text, onFail) {
   if (!('speechSynthesis' in window)) { if (onFail) onFail(); return; }
   const synth = window.speechSynthesis;
+  try { synth.cancel(); } catch (e) { /* nothing was playing */ }
   const utter = new SpeechSynthesisUtterance(text);
   utter.rate = 0.82;
   utter.lang = 'en-US';
-  let started = false;
-  utter.onstart = () => { started = true; };
   utter.onerror = () => { if (onFail) onFail(); };
-  const kick = () => {
-    try { synth.speak(utter); } catch (e) { if (onFail) onFail(); }
-  };
-  if (synth.speaking || synth.pending) {
-    synth.cancel();
-    setTimeout(kick, 60);
-  } else {
-    kick();
+  try {
+    synth.speak(utter);
+  } catch (e) {
+    if (onFail) onFail();
   }
-  // If neither onstart nor onerror fires within a bit, assume it silently failed.
-  setTimeout(() => { if (!started && onFail) onFail(); }, 1500);
 }
 
 function flashMicStatus(els, message) {
@@ -495,25 +502,52 @@ function useHearIt() {
 }
 
 // ---------- Tap-a-word-for-definition (both Levels and Practice) ----------
+// Tries Wiktionary's REST API first (reliable, genuine CORS support from
+// Wikimedia's own infrastructure), then falls back to a second free API.
+// Both can occasionally be unavailable, so failures are handled quietly.
 const definitionCache = {};
+
+function stripHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || '';
+}
 
 async function fetchDefinition(rawWord) {
   const key = normalizeWord(rawWord);
   if (!key) return null;
   if (Object.prototype.hasOwnProperty.call(definitionCache, key)) return definitionCache[key];
+
   try {
-    const res = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(key));
-    if (!res.ok) throw new Error('lookup failed');
-    const data = await res.json();
-    const meaning = data && data[0] && data[0].meanings && data[0].meanings[0];
-    const def = meaning && meaning.definitions && meaning.definitions[0] && meaning.definitions[0].definition;
-    const result = def ? { pos: meaning.partOfSpeech, def } : null;
-    definitionCache[key] = result;
-    return result;
-  } catch (e) {
-    definitionCache[key] = null;
-    return null;
-  }
+    const res = await fetch('https://en.wiktionary.org/api/rest_v1/page/definition/' + encodeURIComponent(key));
+    if (res.ok) {
+      const data = await res.json();
+      const entry = data && data.en && data.en[0];
+      const defRaw = entry && entry.definitions && entry.definitions[0] && entry.definitions[0].definition;
+      if (defRaw) {
+        const result = { pos: entry.partOfSpeech, def: stripHtml(defRaw) };
+        definitionCache[key] = result;
+        return result;
+      }
+    }
+  } catch (e) { /* try the fallback source below */ }
+
+  try {
+    const res2 = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(key));
+    if (res2.ok) {
+      const data2 = await res2.json();
+      const meaning = data2 && data2[0] && data2[0].meanings && data2[0].meanings[0];
+      const def2 = meaning && meaning.definitions && meaning.definitions[0] && meaning.definitions[0].definition;
+      if (def2) {
+        const result = { pos: meaning.partOfSpeech, def: def2 };
+        definitionCache[key] = result;
+        return result;
+      }
+    }
+  } catch (e) { /* both sources failed */ }
+
+  definitionCache[key] = null;
+  return null;
 }
 
 async function showDefinitionFor(rawWord, mode) {
@@ -542,8 +576,8 @@ function handleWordTap(e, mode) {
   const idx = Array.from(cardTextEl.querySelectorAll('.word')).indexOf(span);
   const rawWord = attempt.rawWords[idx];
   if (!rawWord) return;
+  if (mode === 'practice') speak(rawWord); // must stay synchronous — do this before the async lookup
   showDefinitionFor(rawWord, mode);
-  if (mode === 'practice') speak(rawWord);
 }
 
 function openLevel(n) {
@@ -798,6 +832,7 @@ function handleMicToggle() {
 el.micBtn.addEventListener('click', handleMicToggle);
 el.hearBtn.addEventListener('click', useHearIt);
 el.cardText.addEventListener('click', (e) => handleWordTap(e, 'level'));
+el.definitionClose.addEventListener('click', () => { el.definitionPanel.style.display = 'none'; });
 
 el.skipBtn.addEventListener('click', skipLevel);
 el.backBtn.addEventListener('click', closeLevel);
@@ -822,24 +857,18 @@ function arrowIcon(direction, size) {
 // No points, no levels — but the mic, word highlighting, and Auto-Play
 // all work the same way as Levels. Arrows always browse freely,
 // whether or not the current card has been spoken correctly.
+//
+// Practice has two views: "Cards" (the flashcard deck) and
+// "Missed Words" (a plain word bank of everything you've gotten wrong,
+// each with its own hear/definition/remove controls — a standalone
+// vocabulary tool, not tied to any particular phrase).
 // -----------------------------------------------------------
 let randomOrder = [];
 let randomIndex = 0;
 const activeFilters = new Set(['easy', 'medium', 'hard']);
-let missedOnly = false;
-
-function phraseContainsMissedWord(phrase) {
-  const { rawWords } = tokenizePhrase(phrase.text);
-  return rawWords.some(w => state.missedWords.has(normalizeWord(w)));
-}
 
 function shuffledFilteredPhrases() {
-  let pool = PHRASES.filter(p => activeFilters.has(p.difficulty));
-  if (missedOnly) {
-    const narrowed = pool.filter(phraseContainsMissedWord);
-    if (narrowed.length > 0) pool = narrowed;
-  }
-  const arr = pool.slice();
+  const arr = PHRASES.filter(p => activeFilters.has(p.difficulty));
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -868,19 +897,19 @@ function renderFilterRow() {
     });
     el.filterRow.appendChild(btn);
   });
+}
 
-  if (state.missedWords.size > 0) {
-    const missedBtn = document.createElement('button');
-    missedBtn.className = 'filter-btn missed-filter' + (missedOnly ? ' active-missed' : '');
-    missedBtn.textContent = '⚠ Missed (' + state.missedWords.size + ')';
-    missedBtn.addEventListener('click', () => {
-      missedOnly = !missedOnly;
-      renderFilterRow();
-      randomOrder = shuffledFilteredPhrases();
-      randomIndex = 0;
-      loadRandomCard();
-    });
-    el.filterRow.appendChild(missedBtn);
+function setPracticeView(view) {
+  const isCards = view === 'cards';
+  el.cardsView.style.display = isCards ? '' : 'none';
+  el.missedView.style.display = isCards ? 'none' : 'block';
+  el.tabCards.classList.toggle('active', isCards);
+  el.tabMissed.classList.toggle('active', !isCards);
+  if (isCards) {
+    if (recognizing) stopRecognition();
+  } else {
+    if (recognizing) stopRecognition();
+    renderMissedList();
   }
 }
 
@@ -889,6 +918,7 @@ function openRandomPractice() {
   randomOrder = shuffledFilteredPhrases();
   randomIndex = 0;
   loadRandomCard();
+  setPracticeView('cards');
   el.randomOverlay.classList.add('open');
 }
 
@@ -938,11 +968,62 @@ function closeRandomPractice() {
   renderMap();
 }
 
+// ---------- Missed Words bank ----------
+function updateMissedTabLabel() {
+  el.tabMissed.textContent = 'Missed Words (' + state.missedWords.size + ')';
+}
+
+function buildMissedRow(word) {
+  const row = document.createElement('div');
+  row.className = 'missed-word-row';
+  row.innerHTML = `
+    <div class="missed-word-main">
+      <div class="missed-word-text">${word}</div>
+      <div class="missed-word-def" style="display:none;"></div>
+    </div>
+    <div class="missed-word-actions">
+      <button class="mini-icon-btn" data-action="hear" aria-label="Hear word">🔊</button>
+      <button class="mini-icon-btn" data-action="define" aria-label="Show definition">Aa</button>
+      <button class="mini-icon-btn remove" data-action="remove" aria-label="Remove word">✕</button>
+    </div>
+  `;
+  row.querySelector('[data-action="hear"]').addEventListener('click', () => speak(word));
+  const defEl = row.querySelector('.missed-word-def');
+  row.querySelector('[data-action="define"]').addEventListener('click', async () => {
+    if (defEl.style.display === 'block') { defEl.style.display = 'none'; return; }
+    defEl.style.display = 'block';
+    defEl.textContent = 'Looking up definition…';
+    const result = await fetchDefinition(word);
+    defEl.textContent = result
+      ? (result.pos ? '(' + result.pos + ') ' : '') + result.def
+      : 'No definition found for this word.';
+  });
+  row.querySelector('[data-action="remove"]').addEventListener('click', () => {
+    state.missedWords.delete(word);
+    persistMissedWords();
+    updatePracticeFabBadge();
+    updateMissedTabLabel();
+    renderMissedList();
+  });
+  return row;
+}
+
+function renderMissedList() {
+  const words = Array.from(state.missedWords).sort();
+  el.missedList.innerHTML = '';
+  el.missedEmpty.style.display = words.length ? 'none' : 'block';
+  words.forEach(w => el.missedList.appendChild(buildMissedRow(w)));
+  updateMissedTabLabel();
+}
+
 el.practiceFab.addEventListener('click', openRandomPractice);
 el.randomBackBtn.addEventListener('click', closeRandomPractice);
 el.randomMicBtn.addEventListener('click', handleMicToggle);
 el.randomHearBtn.addEventListener('click', useHearIt);
 el.randomCardText.addEventListener('click', (e) => handleWordTap(e, 'practice'));
+el.randomDefinitionClose.addEventListener('click', () => { el.randomDefinitionPanel.style.display = 'none'; });
+el.tabCards.addEventListener('click', () => setPracticeView('cards'));
+el.tabMissed.addEventListener('click', () => setPracticeView('missed'));
 el.randomPrevBtn.addEventListener('click', () => {
   randomIndex = (randomIndex - 1 + randomOrder.length) % randomOrder.length;
   loadRandomCard();
@@ -1025,6 +1106,7 @@ el.playBtn.addEventListener('click', () => {
   renderFontOptions();
   renderAutoPlayToggle();
   updatePracticeFabBadge();
+  updateMissedTabLabel();
   renderMap();
   // land on whichever level the player is currently on, not level 1
   requestAnimationFrame(() => { centerOnLevel(unlockedLevel()); });

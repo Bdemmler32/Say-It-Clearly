@@ -67,6 +67,7 @@
 
       <!-- Tap any word on the card to see its definition. -->
       <div class="definition-panel" id="definitionPanel" style="display:none;">
+        <button class="definition-close" id="definitionClose" aria-label="Close definition">✕</button>
         <div class="definition-word" id="definitionWord"></div>
         <div class="definition-text" id="definitionText"></div>
       </div>
@@ -86,39 +87,55 @@
         <div class="level-pill" id="randomPill">Practice</div>
       </div>
 
-      <div class="filter-row" id="filterRow"></div>
+      <div class="view-toggle" id="viewToggle">
+        <button class="view-tab active" id="tabCards">Cards</button>
+        <button class="view-tab" id="tabMissed">Missed Words (0)</button>
+      </div>
 
-      <div class="deck">
-        <div class="stack-card s2"></div>
-        <div class="stack-card s1"></div>
-        <div class="card" id="randomCard">
-          <div class="card-text" id="randomCardText"></div>
-          <div class="card-focus-tag" id="randomFocusTag"></div>
+      <div id="cardsView">
+        <div class="filter-row" id="filterRow"></div>
+
+        <div class="deck">
+          <div class="stack-card s2"></div>
+          <div class="stack-card s1"></div>
+          <div class="card" id="randomCard">
+            <div class="card-text" id="randomCardText"></div>
+            <div class="card-focus-tag" id="randomFocusTag"></div>
+          </div>
+        </div>
+
+        <div class="result-banner" id="randomResultBanner" style="display:none;"></div>
+
+        <div class="mic-area" id="randomMicArea">
+          <button class="mic-btn" id="randomMicBtn" aria-label="Start speaking">🎙</button>
+          <div class="mic-status" id="randomMicStatus">Tap the mic and say the phrase</div>
+          <button class="hear-btn" id="randomHearBtn" style="display:none;">🔊 Hear it</button>
+        </div>
+
+        <div class="no-support-msg" id="randomNoSupportMsg" style="display:none;">
+          Speech recognition isn't available in this browser — you can still browse cards with the arrows.
+        </div>
+
+        <!-- Tap any word to hear it and see its definition. -->
+        <div class="definition-panel" id="randomDefinitionPanel" style="display:none;">
+          <button class="definition-close" id="randomDefinitionClose" aria-label="Close definition">✕</button>
+          <div class="definition-word" id="randomDefinitionWord"></div>
+          <div class="definition-text" id="randomDefinitionText"></div>
+        </div>
+
+        <div class="random-nav">
+          <button class="circle-arrow-btn" id="randomPrevBtn" aria-label="Previous card"></button>
+          <div class="counter" id="randomCounter"></div>
+          <button class="circle-arrow-btn" id="randomNextBtn" aria-label="Next card"></button>
         </div>
       </div>
 
-      <div class="result-banner" id="randomResultBanner" style="display:none;"></div>
-
-      <div class="mic-area" id="randomMicArea">
-        <button class="mic-btn" id="randomMicBtn" aria-label="Start speaking">🎙</button>
-        <div class="mic-status" id="randomMicStatus">Tap the mic and say the phrase</div>
-        <button class="hear-btn" id="randomHearBtn" style="display:none;">🔊 Hear it</button>
-      </div>
-
-      <div class="no-support-msg" id="randomNoSupportMsg" style="display:none;">
-        Speech recognition isn't available in this browser — you can still browse cards with the arrows.
-      </div>
-
-      <!-- Tap any word to hear it and see its definition. -->
-      <div class="definition-panel" id="randomDefinitionPanel" style="display:none;">
-        <div class="definition-word" id="randomDefinitionWord"></div>
-        <div class="definition-text" id="randomDefinitionText"></div>
-      </div>
-
-      <div class="random-nav">
-        <button class="circle-arrow-btn" id="randomPrevBtn" aria-label="Previous card"></button>
-        <div class="counter" id="randomCounter"></div>
-        <button class="circle-arrow-btn" id="randomNextBtn" aria-label="Next card"></button>
+      <!-- A standalone vocabulary tool: every word you've gotten wrong,
+           independent of which phrase it came from. Hear it, look up its
+           definition, or remove it once you've learned it. -->
+      <div class="missed-view" id="missedView" style="display:none;">
+        <div class="missed-empty" id="missedEmpty">No missed words yet — they'll show up here as you practice.</div>
+        <div class="missed-list" id="missedList"></div>
       </div>
     </div>
 
