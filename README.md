@@ -117,6 +117,12 @@ fluidly (which is common and how natural speech usually comes out) —
 either way it's accepted, and it still renders as a single hyphenated
 word on the card with each half colored independently.
 
+Accented words (e.g. "café," "façade," "cortège") are normalized to
+their plain-letter form before matching ("cafe," "facade," "cortege"),
+since that's what speech recognition actually transcribes them as —
+without this, the accent mark was being deleted outright instead of
+converted, permanently breaking the match on any word containing one.
+
 ### Pronunciation help ("Hear it")
 
 If a word comes back marked wrong, a "🔊 Hear it" button appears and
@@ -126,6 +132,13 @@ Using it on a level means that level completes without earning points
 there's no points system, so it's just there to help, with no cost.
 In Practice, you can also tap any word directly to hear it — no need
 to wait for a mistake.
+
+A "Hear It in Practice" toggle in Settings lets you turn off all audio
+in Practice mode specifically (both the mistake-triggered button and
+tap-to-hear) while keeping definitions fully working — useful for
+practicing silently, or for anyone who just wants the vocabulary
+lookup without the pronunciation playback. Levels are unaffected by
+this toggle.
 
 ### Definitions
 

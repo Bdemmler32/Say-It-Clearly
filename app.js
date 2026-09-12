@@ -122,6 +122,7 @@ const state = {
   levelStatus: {},   // { [levelIndex]: 'completed' | 'skipped' }
   font: 'handwritten',
   autoPlay: false,
+  practiceHearEnabled: true,
   openLevel: null,
 };
 
@@ -143,6 +144,7 @@ async function loadState() {
   state.levelStatus = await Store.get('levelStatus', {});
   state.font = await Store.get('font', 'handwritten');
   state.autoPlay = await Store.get('autoPlay', false);
+  state.practiceHearEnabled = await Store.get('practiceHearEnabled', true);
 }
 
 async function persistProgress() {
@@ -156,6 +158,10 @@ async function persistFont() {
 
 async function persistAutoPlay() {
   await Store.set('autoPlay', state.autoPlay);
+}
+
+async function persistPracticeHearEnabled() {
+  await Store.set('practiceHearEnabled', state.practiceHearEnabled);
 }
 
 // -----------------------------------------------------------
@@ -211,6 +217,7 @@ const el = {
   closeSettingsBtn: document.getElementById('closeSettingsBtn'),
   fontOptions: document.getElementById('fontOptions'),
   autoPlayToggle: document.getElementById('autoPlayToggle'),
+  practiceHearToggle: document.getElementById('practiceHearToggle'),
   testSoundBtn: document.getElementById('testSoundBtn'),
   testSoundSub: document.getElementById('testSoundSub'),
   resetBtn: document.getElementById('resetBtn'),
@@ -331,7 +338,16 @@ let recognizing = false;
 let attempt = null; // { mode: 'level'|'practice', text, rawWords, seps, targetWords, statuses, matchedCount, hasMistake, assisted, levelIndex? }
 
 function normalizeWord(w) {
-  return w.toLowerCase().replace(/[^a-z']/g, '');
+  return w
+    .toLowerCase()
+    // Decompose accented letters ("é" -> "e" + a combining accent mark),
+    // then strip the marks — so "café"/"façade"/"cortège" normalize to
+    // "cafe"/"facade"/"cortege", matching what speech recognition actually
+    // transcribes them as. Without this, the accented letter was being
+    // deleted outright ("café" -> "caf"), permanently breaking the match.
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z']/g, '');
 }
 
 function levenshtein(a, b) {
@@ -526,6 +542,7 @@ function flashMicStatus(els, message) {
 
 function useHearIt() {
   if (!attempt) return;
+  if (attempt.mode === 'practice' && !state.practiceHearEnabled) return;
   attempt.assisted = true;
   const word = compoundWordAt(attempt, attempt.matchedCount) || attempt.text;
   const els = activeEls();
@@ -675,7 +692,9 @@ function handleWordTap(e, mode) {
   const idx = Array.from(cardTextEl.querySelectorAll('.word')).indexOf(span);
   if (idx < 0 || !attempt.rawWords[idx]) return;
   const word = compoundWordAt(attempt, idx);
-  if (mode === 'practice') speak(word); // must stay synchronous — do this before the async lookup
+  // Tap-to-hear can be turned off in Settings for Practice; definitions
+  // always show regardless.
+  if (mode === 'practice' && state.practiceHearEnabled) speak(word); // must stay synchronous — do this before the async lookup
   showDefinitionFor(word, mode);
 }
 
@@ -855,7 +874,8 @@ function setupRecognition() {
             attempt.hasMistake = true;
             renderAttempt(attempt);
             const stillEls = activeEls();
-            if (stillEls) stillEls.hearBtn.style.display = 'inline-flex';
+            const hearAllowed = attempt.mode === 'level' || state.practiceHearEnabled;
+            if (stillEls && hearAllowed) stillEls.hearBtn.style.display = 'inline-flex';
           }
           incorrectTimer = null;
           incorrectTimerIndex = null;
@@ -1195,6 +1215,20 @@ el.autoPlayToggle.addEventListener('click', async () => {
   await persistAutoPlay();
 });
 
+function renderPracticeHearToggle() {
+  el.practiceHearToggle.classList.toggle('on', state.practiceHearEnabled);
+}
+el.practiceHearToggle.addEventListener('click', async () => {
+  state.practiceHearEnabled = !state.practiceHearEnabled;
+  renderPracticeHearToggle();
+  await persistPracticeHearEnabled();
+  // If it was just turned off mid-session, hide the button immediately
+  // rather than waiting for the next mistake to re-evaluate it.
+  if (!state.practiceHearEnabled && attempt && attempt.mode === 'practice') {
+    el.randomHearBtn.style.display = 'none';
+  }
+});
+
 el.testSoundBtn.addEventListener('click', () => {
   const originalLabel = el.testSoundBtn.textContent;
   el.testSoundBtn.textContent = '🔊 Playing…';
@@ -1234,6 +1268,7 @@ el.playBtn.addEventListener('click', () => {
   setupRecognition();
   renderFontOptions();
   renderAutoPlayToggle();
+  renderPracticeHearToggle();
   renderMap();
   // land on whichever level the player is currently on, not level 1
   requestAnimationFrame(() => { centerOnLevel(unlockedLevel()); });

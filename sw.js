@@ -4,7 +4,7 @@
 // touch. Changing it makes the browser treat this as a new service worker,
 // which triggers install/activate again and — critically — deletes the old
 // cache in activate() below, so nothing stale can ever linger in storage.
-const VERSION = 'v11';
+const VERSION = 'v13';
 const CACHE_NAME = 'say-it-clearly-' + VERSION;
 
 const CORE_ASSETS = [
