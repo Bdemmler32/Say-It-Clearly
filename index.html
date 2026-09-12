@@ -46,11 +46,12 @@
     </div>
 
     <div class="practice-overlay" id="practiceOverlay">
-      <div class="practice-header">
+      <div class="practice-navbar">
         <button class="back-btn" id="backBtn" type="button"><span id="backIcon"></span> Map</button>
         <div class="level-pill" id="levelPill"></div>
       </div>
 
+      <div class="practice-body">
       <div class="deck">
         <div class="stack-card s2"></div>
         <div class="stack-card s1"></div>
@@ -84,17 +85,19 @@
         <button class="action-btn" id="skipBtn" type="button">Skip (10 pts)</button>
         <button class="action-btn primary" id="nextBtn" style="display:none;" type="button">Next level <span id="nextIcon"></span></button>
       </div>
+      </div>
     </div>
 
     <!-- Random practice: shuffles through every card in the database. Same
          mic/word-highlighting engine as Levels, but no points or progression —
          the arrows always browse freely regardless of whether the mic caught it. -->
     <div class="practice-overlay" id="randomOverlay">
-      <div class="practice-header">
+      <div class="practice-navbar">
         <button class="back-btn" id="randomBackBtn" type="button"><span id="randomBackIcon"></span> Map</button>
         <div class="level-pill" id="randomPill">Practice</div>
       </div>
 
+      <div class="practice-body">
       <div class="filter-label">Toggle Easy / Medium / Hard to choose which difficulties show up:</div>
       <div class="filter-row" id="filterRow"></div>
 
@@ -130,6 +133,7 @@
         <button class="circle-arrow-btn" id="randomPrevBtn" aria-label="Previous card" type="button"></button>
         <div class="counter" id="randomCounter"></div>
         <button class="circle-arrow-btn" id="randomNextBtn" aria-label="Next card" type="button"></button>
+      </div>
       </div>
     </div>
 

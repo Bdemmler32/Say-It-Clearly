@@ -272,29 +272,46 @@ button { font-family: inherit; }
   position: fixed;
   inset: 0;
   background-color: var(--bg-app);
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.26s ease;
+  z-index: 30;
+  overflow: hidden;
+}
+.practice-overlay.open { transform: translateY(0); }
+
+/* A real navbar, matching .topbar exactly (same height, padding formula,
+   color, and border) — the back button and difficulty/level pill live in
+   here now instead of floating in the scrollable content below. */
+.practice-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 14px calc(16px + env(safe-area-inset-left));
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--panel-border);
+  background-color: var(--bg-app);
+  position: relative;
+  z-index: 1;
+}
+
+/* Everything below the navbar: this is what actually scrolls, and it's
+   also where the background texture now lives (the navbar above stays a
+   flat solid color, same as the map screen's topbar). */
+.practice-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px calc(18px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));
   background-image: url('icons/bg-texture.webp');
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
   background-attachment: fixed;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: calc(20px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));
-  transform: translateY(100%);
-  transition: transform 0.26s ease;
-  z-index: 30;
-  overflow-y: auto;
-}
-.practice-overlay.open { transform: translateY(0); }
-
-.practice-header {
-  width: 100%;
-  max-width: 420px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 18px;
 }
 
 .back-btn {
