@@ -70,6 +70,22 @@ reads that word aloud using the browser's built-in text-to-speech.
 Using it on a level means that level completes without earning points
 (you still progress) — it's a hint, not a shortcut. In Practice mode
 there's no points system, so it's just there to help, with no cost.
+In Practice, you can also tap any word directly to hear it — no need
+to wait for a mistake.
+
+### Definitions and missed-word review
+
+Tap any word on a card (in either Levels or Practice) to look up its
+definition, fetched live from a free dictionary API
+(dictionaryapi.dev) and shown right on the card — no separate app
+needed. Word text has native text-selection disabled so your phone's
+built-in "Look Up" popup doesn't fight with this.
+
+Any word that gets marked wrong is remembered (persisted the same way
+as points/progress). Once you've missed at least one word, an
+"⚠ Missed" filter chip appears in Practice's filter row, narrowing the
+deck to just phrases containing words you've struggled with — and the
+Practice button shows a small badge with your missed-word count.
 
 Best support: Chrome on Android/desktop, Safari on iOS/macOS. Requires
 mic permission and (for most browsers) HTTPS — which GitHub Pages

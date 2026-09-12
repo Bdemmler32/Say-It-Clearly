@@ -26,7 +26,7 @@
       <div class="map-track" id="mapTrack"></div>
     </div>
 
-    <button class="fab-practice" id="practiceFab">Practice</button>
+    <button class="fab-practice" id="practiceFab">Practice<span class="fab-badge" id="fabBadge" style="display:none;"></span></button>
 
     <!-- Welcome splash — dismissed by the Play button, map is already full-screen behind it -->
     <div class="welcome-overlay" id="welcomeOverlay">
@@ -65,6 +65,12 @@
         Speech recognition isn't available in this browser. Try Chrome on Android or Safari on iOS to play.
       </div>
 
+      <!-- Tap any word on the card to see its definition. -->
+      <div class="definition-panel" id="definitionPanel" style="display:none;">
+        <div class="definition-word" id="definitionWord"></div>
+        <div class="definition-text" id="definitionText"></div>
+      </div>
+
       <div class="practice-actions">
         <button class="action-btn" id="skipBtn">Skip (10 pts)</button>
         <button class="action-btn primary" id="nextBtn" style="display:none;">Next level <span id="nextIcon"></span></button>
@@ -101,6 +107,12 @@
 
       <div class="no-support-msg" id="randomNoSupportMsg" style="display:none;">
         Speech recognition isn't available in this browser — you can still browse cards with the arrows.
+      </div>
+
+      <!-- Tap any word to hear it and see its definition. -->
+      <div class="definition-panel" id="randomDefinitionPanel" style="display:none;">
+        <div class="definition-word" id="randomDefinitionWord"></div>
+        <div class="definition-text" id="randomDefinitionText"></div>
       </div>
 
       <div class="random-nav">
