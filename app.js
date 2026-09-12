@@ -701,7 +701,11 @@ function resetDefinitionHint(mode) {
     ? { word: el.definitionWord, text: el.definitionText }
     : { word: el.randomDefinitionWord, text: el.randomDefinitionText };
   panel.word.textContent = '';
-  panel.text.textContent = DEFINITION_HINTS[mode];
+  // In Practice, if "Hear It" is turned off, reuse the exact same hint
+  // text as Levels — no point mentioning tap-to-hear when it's disabled.
+  panel.text.textContent = (mode === 'practice' && !state.practiceHearEnabled)
+    ? DEFINITION_HINTS.level
+    : DEFINITION_HINTS[mode];
   panel.text.classList.add('hint');
 }
 
@@ -1259,10 +1263,13 @@ el.practiceHearToggle.addEventListener('click', async () => {
   state.practiceHearEnabled = !state.practiceHearEnabled;
   renderPracticeHearToggle();
   await persistPracticeHearEnabled();
-  // If it was just turned off mid-session, hide the button immediately
-  // rather than waiting for the next mistake to re-evaluate it.
-  if (!state.practiceHearEnabled && attempt && attempt.mode === 'practice') {
-    el.randomHearBtn.style.display = 'none';
+  if (attempt && attempt.mode === 'practice') {
+    // If it was just turned off mid-session, hide the button immediately
+    // rather than waiting for the next mistake to re-evaluate it.
+    if (!state.practiceHearEnabled) el.randomHearBtn.style.display = 'none';
+    // If the definition panel is just showing the idle hint (not an
+    // active lookup), refresh its wording to match the new toggle state.
+    if (el.randomDefinitionText.classList.contains('hint')) resetDefinitionHint('practice');
   }
 });
 

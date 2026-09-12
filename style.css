@@ -742,6 +742,8 @@ button { font-family: inherit; }
   background: var(--panel);
   width: 100%;
   max-width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
   border-radius: 18px 18px 0 0;
   padding: 22px calc(22px + env(safe-area-inset-right)) calc(30px + env(safe-area-inset-bottom)) calc(22px + env(safe-area-inset-left));
   transform: translateY(20px);
