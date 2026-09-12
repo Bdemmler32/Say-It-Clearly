@@ -860,10 +860,14 @@ function setupRecognition() {
     const els = activeEls();
     if (!els) return;
     els.micBtn.classList.remove('listening');
-    if (attempt && attempt.matchedCount < attempt.targetWords.length) {
-      els.micStatus.textContent = attempt.matchedCount > 0
-        ? 'Not quite — tap the mic to try again'
-        : 'Mic off — tap the mic to try again';
+    if (attempt) {
+      if (attempt.matchedCount >= attempt.targetWords.length) {
+        els.micStatus.textContent = '';
+      } else if (attempt.matchedCount > 0) {
+        els.micStatus.textContent = 'Not quite — tap the mic to try again';
+      } else {
+        els.micStatus.textContent = 'Mic off — tap the mic to try again';
+      }
     }
   };
 }
@@ -898,11 +902,17 @@ function stopRecognition() {
   if (!els) return;
   els.micBtn.classList.remove('listening');
   // Make it immediately clear the mic is off — don't leave "Listening…"
-  // on screen just because the async 'end' event hasn't fired yet.
-  if (attempt && attempt.matchedCount < attempt.targetWords.length) {
-    els.micStatus.textContent = attempt.matchedCount > 0
-      ? 'Mic off — tap to try again'
-      : 'Mic off — tap the mic to start listening';
+  // on screen just because the async 'end' event hasn't fired yet. This
+  // covers all three cases: fully correct (banner already says so, so
+  // just clear the status line), partially said, or nothing said yet.
+  if (attempt) {
+    if (attempt.matchedCount >= attempt.targetWords.length) {
+      els.micStatus.textContent = '';
+    } else if (attempt.matchedCount > 0) {
+      els.micStatus.textContent = 'Mic off — tap to try again';
+    } else {
+      els.micStatus.textContent = 'Mic off — tap the mic to start listening';
+    }
   }
 }
 
