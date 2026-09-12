@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Say It — Speak the Phrase</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&family=Baloo+2:wght@600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <div class="topbar">
+    <div class="app-name">Say It<span>.</span></div>
+    <div class="topbar-right">
+      <div class="points-badge"><span class="dot"></span><span id="pointsValue">0</span> pts</div>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <div class="map-wrap" id="mapWrap">
+      <div class="map-track" id="mapTrack"></div>
+    </div>
+
+    <button class="fab-practice" id="practiceFab">Practice</button>
+
+    <!-- Welcome splash — dismissed by the Play button, map is already full-screen behind it -->
+    <div class="welcome-overlay" id="welcomeOverlay">
+      <div class="welcome-panel">
+        <div class="welcome-title">Say It<span>.</span></div>
+        <div class="welcome-sub">Pick a level to start speaking.</div>
+        <button class="play-btn" id="playBtn">▶ Play</button>
+      </div>
+    </div>
+
+    <div class="practice-overlay" id="practiceOverlay">
+      <div class="practice-header">
+        <button class="back-btn" id="backBtn"><span id="backIcon"></span> Map</button>
+        <div class="level-pill" id="levelPill"></div>
+      </div>
+
+      <div class="deck">
+        <div class="stack-card s2"></div>
+        <div class="stack-card s1"></div>
+        <div class="card" id="card">
+          <div class="card-text" id="cardText"></div>
+          <div class="card-focus-tag" id="cardFocusTag"></div>
+        </div>
+      </div>
+
+      <div class="result-banner" id="resultBanner" style="display:none;"></div>
+
+      <!-- Mic-only controls. There is intentionally no text input anywhere. -->
+      <div class="mic-area" id="micArea">
+        <button class="mic-btn" id="micBtn" aria-label="Start speaking">🎙</button>
+        <div class="mic-status" id="micStatus">Tap the mic and say the phrase</div>
+      </div>
+
+      <div class="no-support-msg" id="noSupportMsg" style="display:none;">
+        Speech recognition isn't available in this browser. Try Chrome on Android or Safari on iOS to play.
+      </div>
+
+      <div class="practice-actions">
+        <button class="action-btn" id="skipBtn">Skip (10 pts)</button>
+        <button class="action-btn primary" id="nextBtn" style="display:none;">Next level <span id="nextIcon"></span></button>
+      </div>
+    </div>
+
+    <!-- Random practice: shuffles through every card in the database, no points/mic involved -->
+    <div class="practice-overlay" id="randomOverlay">
+      <div class="practice-header">
+        <button class="back-btn" id="randomBackBtn"><span id="randomBackIcon"></span> Map</button>
+        <div class="level-pill" id="randomPill">Practice</div>
+      </div>
+
+      <div class="filter-row" id="filterRow"></div>
+
+      <div class="deck">
+        <div class="stack-card s2"></div>
+        <div class="stack-card s1"></div>
+        <div class="card" id="randomCard">
+          <div class="card-text" id="randomCardText"></div>
+          <div class="card-focus-tag" id="randomFocusTag"></div>
+        </div>
+      </div>
+
+      <div class="random-nav">
+        <button class="circle-arrow-btn" id="randomPrevBtn" aria-label="Previous card"></button>
+        <div class="counter" id="randomCounter"></div>
+        <button class="circle-arrow-btn" id="randomNextBtn" aria-label="Next card"></button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<div class="settings-overlay" id="settingsOverlay">
+  <div class="settings-panel">
+    <div class="settings-title">Card font</div>
+    <div class="settings-sub">Change how the phrase text looks if cursive is hard to read.</div>
+    <div id="fontOptions"></div>
+    <div class="settings-footer">
+      <button class="reset-link" id="resetBtn">Reset progress</button>
+      <button class="close-settings" id="closeSettingsBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+<script src="phrases.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
