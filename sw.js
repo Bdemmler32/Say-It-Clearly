@@ -4,7 +4,7 @@
 // touch. Changing it makes the browser treat this as a new service worker,
 // which triggers install/activate again and — critically — deletes the old
 // cache in activate() below, so nothing stale can ever linger in storage.
-const VERSION = 'v15';
+const VERSION = 'v16';
 const CACHE_NAME = 'say-it-clearly-' + VERSION;
 
 const CORE_ASSETS = [
@@ -46,7 +46,18 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
-  const isSameOrigin = new URL(request.url).origin === self.location.origin;
+  const url = new URL(request.url);
+
+  // Only ever handle real http(s) requests. A page's service worker
+  // intercepts EVERY outgoing fetch from that page, including ones made
+  // by unrelated browser extensions running alongside it (chrome-extension:
+  // URLs) — the Cache API can't store those, and trying to throws on every
+  // single request, which was spamming the console and adding overhead on
+  // any desktop browser with extensions installed (not an issue on mobile,
+  // which doesn't support extensions).
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
+  const isSameOrigin = url.origin === self.location.origin;
 
   if (isSameOrigin) {
     // Network-first for our own files: always prefer whatever's actually
@@ -57,7 +68,7 @@ self.addEventListener('fetch', (event) => {
       fetch(request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
           return response;
         })
         .catch(() => caches.match(request))
@@ -70,7 +81,7 @@ self.addEventListener('fetch', (event) => {
         if (cached) return cached;
         return fetch(request).then((response) => {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
           return response;
         });
       })
