@@ -17,6 +17,41 @@ microphone.
   / 75 hard, no repeated phrases or challenge terms.
 - `app.js` — game logic: level generation, points, speech recognition,
   settings, storage.
+- `manifest.json` — makes the game installable as an app (PWA).
+- `sw.js` — service worker for offline support and cache control.
+- `icons/` — app icons for the home screen / install prompt.
+
+## Installing it as an app (PWA)
+
+This is now an installable Progressive Web App. On Android Chrome,
+visiting the site shows an "Install app" option (or ⋮ menu → "Add to
+Home screen"). On iPhone Safari, use the Share button → "Add to Home
+Screen". Either way it launches full-screen, without browser chrome,
+using the icon in `icons/`.
+
+## Fixing stale/cached files after you push an update
+
+This was a recurring headache before the service worker existed:
+GitHub Pages + mobile browsers can cache old JS aggressively, so a
+pushed update wouldn't show up without a manual hard-refresh. `sw.js`
+fixes this two ways:
+
+1. **Network-first fetching** for the game's own files — the service
+   worker always tries to fetch the live version first and only falls
+   back to a cached copy if there's no connection. So as long as
+   someone's online, they get your latest push automatically. This is
+   the main fix.
+2. **A version number as a backup**: at the top of `sw.js`,
+   `const VERSION = 'v1'` — **bump this string every time you push a
+   change** (v1 → v2 → v3...). This makes the browser treat it as a
+   brand-new service worker, which wipes out the old cache entirely on
+   activation, and the page auto-reloads once the new one takes over.
+   It's belt-and-suspenders on top of #1, not strictly required for
+   correctness, but costs nothing and keeps things tidy.
+
+If something ever still looks stale despite this, an incognito/private
+tab always bypasses all caching and is the fastest way to confirm
+whether a given change is actually live.
 
 ## How levels work
 
