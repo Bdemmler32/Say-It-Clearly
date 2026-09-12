@@ -122,7 +122,6 @@ const state = {
   levelStatus: {},   // { [levelIndex]: 'completed' | 'skipped' }
   font: 'handwritten',
   autoPlay: false,
-  missedWords: new Set(), // normalized words that have been marked wrong at least once
   openLevel: null,
 };
 
@@ -144,7 +143,6 @@ async function loadState() {
   state.levelStatus = await Store.get('levelStatus', {});
   state.font = await Store.get('font', 'handwritten');
   state.autoPlay = await Store.get('autoPlay', false);
-  state.missedWords = new Set(await Store.get('missedWords', []));
 }
 
 async function persistProgress() {
@@ -158,28 +156,6 @@ async function persistFont() {
 
 async function persistAutoPlay() {
   await Store.set('autoPlay', state.autoPlay);
-}
-
-async function persistMissedWords() {
-  await Store.set('missedWords', Array.from(state.missedWords));
-}
-
-function recordMissedWord(word) {
-  if (!word || state.missedWords.has(word)) return;
-  state.missedWords.add(word);
-  persistMissedWords();
-  updatePracticeFabBadge();
-  updateMissedTabLabel();
-}
-
-function updatePracticeFabBadge() {
-  const n = state.missedWords.size;
-  if (n > 0) {
-    el.fabBadge.textContent = n > 99 ? '99+' : String(n);
-    el.fabBadge.style.display = 'flex';
-  } else {
-    el.fabBadge.style.display = 'none';
-  }
 }
 
 // -----------------------------------------------------------
@@ -210,7 +186,6 @@ const el = {
   nextBtn: document.getElementById('nextBtn'),
   backBtn: document.getElementById('backBtn'),
   practiceFab: document.getElementById('practiceFab'),
-  fabBadge: document.getElementById('fabBadge'),
   randomOverlay: document.getElementById('randomOverlay'),
   randomCard: document.getElementById('randomCard'),
   randomCardText: document.getElementById('randomCardText'),
@@ -220,12 +195,6 @@ const el = {
   randomPrevBtn: document.getElementById('randomPrevBtn'),
   randomNextBtn: document.getElementById('randomNextBtn'),
   randomBackBtn: document.getElementById('randomBackBtn'),
-  tabCards: document.getElementById('tabCards'),
-  tabMissed: document.getElementById('tabMissed'),
-  cardsView: document.getElementById('cardsView'),
-  missedView: document.getElementById('missedView'),
-  missedList: document.getElementById('missedList'),
-  missedEmpty: document.getElementById('missedEmpty'),
   randomMicBtn: document.getElementById('randomMicBtn'),
   randomMicStatus: document.getElementById('randomMicStatus'),
   randomMicArea: document.getElementById('randomMicArea'),
@@ -413,9 +382,9 @@ function freshWordStatuses(len) {
 }
 
 // For a hyphenated compound like "low-roofed" (tokenized as two separate
-// words for speech matching), reconstruct the full compound so definitions,
-// "Hear it", and the missed-words bank all deal with the real word rather
-// than a meaningless fragment like "roofed" on its own.
+// words for speech matching), reconstruct the full compound so definitions
+// and "Hear it" deal with the real word rather than a meaningless fragment
+// like "roofed" on its own.
 function compoundWordAt(a, idx) {
   let start = idx, end = idx;
   while (start > 0 && a.seps[start - 1] === '-') start--;
@@ -477,6 +446,27 @@ function clearIncorrectTimer() {
 // tap-to-hear in Practice — no external service, just the browser's
 // built-in SpeechSynthesis.
 //
+// Chrome on Android frequently has an EMPTY voice list at the exact moment
+// speak() is first called — voices load asynchronously, and querying them
+// right when a button is tapped is often too early. Pre-warming this at
+// boot (and again whenever the browser reports voices are ready) means the
+// cache is usually populated well before the person actually taps anything.
+let cachedVoices = [];
+function warmUpVoices() {
+  if (!('speechSynthesis' in window)) return;
+  const update = () => { cachedVoices = window.speechSynthesis.getVoices() || []; };
+  update();
+  window.speechSynthesis.onvoiceschanged = update;
+  // Some Android WebViews never fire 'voiceschanged' at all; keep checking
+  // for a few seconds as a fallback.
+  let attempts = 0;
+  const poll = setInterval(() => {
+    update();
+    attempts++;
+    if (cachedVoices.length > 0 || attempts > 10) clearInterval(poll);
+  }, 400);
+}
+
 // IMPORTANT: on mobile Safari/Chrome, speak() only works if it's called
 // synchronously inside the click/tap handler — any setTimeout/await in
 // between breaks the "user gesture" chain and the browser silently
@@ -490,11 +480,9 @@ function speak(text, onFail) {
   utter.rate = 0.82;
   utter.volume = 1;
   utter.lang = 'en-US';
-  try {
-    const voices = synth.getVoices ? synth.getVoices() : [];
-    const enVoice = voices && (voices.find(v => v.lang && v.lang.toLowerCase().startsWith('en')) || voices[0]);
-    if (enVoice) utter.voice = enVoice;
-  } catch (e) { /* fine to leave voice unset */ }
+  const voices = cachedVoices.length ? cachedVoices : (synth.getVoices ? synth.getVoices() : []);
+  const enVoice = voices && (voices.find(v => v.lang && v.lang.toLowerCase().startsWith('en')) || voices[0]);
+  if (enVoice) utter.voice = enVoice;
   let settled = false;
   utter.onstart = () => { settled = true; };
   utter.onend = () => { settled = true; };
@@ -818,9 +806,9 @@ function setupRecognition() {
         clearIncorrectTimer();
         incorrectTimerIndex = pointer;
         incorrectTimer = setTimeout(() => {
-          // Only actually lock this in — and only ever record it to the
-          // missed-words bank — once the recognizer has FINALIZED speech
-          // past this word, not just floated an interim guess at it.
+          // Only actually lock this in as a mistake (red + "Hear it")
+          // once the recognizer has FINALIZED speech past this word, not
+          // just floated an interim guess at it.
           if (
             attempt &&
             attempt.matchedCount === pointer &&
@@ -831,7 +819,6 @@ function setupRecognition() {
             renderAttempt(attempt);
             const stillEls = activeEls();
             if (stillEls) stillEls.hearBtn.style.display = 'inline-flex';
-            recordMissedWord(compoundWordAt(attempt, pointer));
           }
           incorrectTimer = null;
           incorrectTimerIndex = null;
@@ -997,26 +984,11 @@ function renderFilterRow() {
   });
 }
 
-function setPracticeView(view) {
-  const isCards = view === 'cards';
-  el.cardsView.style.display = isCards ? '' : 'none';
-  el.missedView.style.display = isCards ? 'none' : 'block';
-  el.tabCards.classList.toggle('active', isCards);
-  el.tabMissed.classList.toggle('active', !isCards);
-  if (isCards) {
-    if (recognizing) stopRecognition();
-  } else {
-    if (recognizing) stopRecognition();
-    renderMissedList();
-  }
-}
-
 function openRandomPractice() {
   renderFilterRow();
   randomOrder = shuffledFilteredPhrases();
   randomIndex = 0;
   loadRandomCard();
-  setPracticeView('cards');
   el.randomOverlay.classList.add('open');
 }
 
@@ -1066,60 +1038,12 @@ function closeRandomPractice() {
   renderMap();
 }
 
-// ---------- Missed Words bank ----------
-function updateMissedTabLabel() {
-  el.tabMissed.textContent = 'Missed Words (' + state.missedWords.size + ')';
-}
-
-function buildMissedRow(word) {
-  const row = document.createElement('div');
-  row.className = 'missed-word-row';
-  row.innerHTML = `
-    <div class="missed-word-header">
-      <div class="missed-word-text">${word}</div>
-      <div class="missed-word-actions">
-        <button class="mini-icon-btn" data-action="hear" aria-label="Hear word">🔊</button>
-        <button class="mini-icon-btn" data-action="define" aria-label="Show definition">Aa</button>
-        <button class="mini-icon-btn remove" data-action="remove" aria-label="Remove word">✕</button>
-      </div>
-    </div>
-    <div class="missed-word-def" style="display:none;"></div>
-  `;
-  row.querySelector('[data-action="hear"]').addEventListener('click', () => speak(word));
-  const defEl = row.querySelector('.missed-word-def');
-  row.querySelector('[data-action="define"]').addEventListener('click', async () => {
-    if (defEl.style.display === 'block') { defEl.style.display = 'none'; return; }
-    defEl.style.display = 'block';
-    defEl.textContent = 'Looking up definition…';
-    const result = await fetchDefinition(word);
-    defEl.textContent = composeDefinitionText(result);
-  });
-  row.querySelector('[data-action="remove"]').addEventListener('click', () => {
-    state.missedWords.delete(word);
-    persistMissedWords();
-    updatePracticeFabBadge();
-    updateMissedTabLabel();
-    renderMissedList();
-  });
-  return row;
-}
-
-function renderMissedList() {
-  const words = Array.from(state.missedWords).sort();
-  el.missedList.innerHTML = '';
-  el.missedEmpty.style.display = words.length ? 'none' : 'block';
-  words.forEach(w => el.missedList.appendChild(buildMissedRow(w)));
-  updateMissedTabLabel();
-}
-
 el.practiceFab.addEventListener('click', openRandomPractice);
 el.randomBackBtn.addEventListener('click', closeRandomPractice);
 el.randomMicBtn.addEventListener('click', handleMicToggle);
 el.randomHearBtn.addEventListener('click', useHearIt);
 el.randomCardText.addEventListener('click', (e) => handleWordTap(e, 'practice'));
 el.randomDefinitionClose.addEventListener('click', () => { el.randomDefinitionPanel.style.display = 'none'; });
-el.tabCards.addEventListener('click', () => setPracticeView('cards'));
-el.tabMissed.addEventListener('click', () => setPracticeView('missed'));
 el.randomPrevBtn.addEventListener('click', () => {
   randomIndex = (randomIndex - 1 + randomOrder.length) % randomOrder.length;
   loadRandomCard();
@@ -1156,6 +1080,9 @@ function renderFontOptions() {
 
 el.settingsBtn.addEventListener('click', () => {
   el.settingsOverlay.classList.add('open');
+  el.testSoundSub.textContent = cachedVoices.length > 0
+    ? `Not hearing "Hear it" or tap-to-hear? Try a quick test. (${cachedVoices.length} voice${cachedVoices.length === 1 ? '' : 's'} detected in this browser.)`
+    : 'Not hearing "Hear it" or tap-to-hear? Try a quick test. (This browser hasn\'t reported any text-to-speech voices yet — that alone would explain silent failures.)';
 });
 el.closeSettingsBtn.addEventListener('click', () => {
   el.settingsOverlay.classList.remove('open');
@@ -1178,14 +1105,18 @@ el.autoPlayToggle.addEventListener('click', async () => {
 });
 
 el.testSoundBtn.addEventListener('click', () => {
-  const original = el.testSoundSub.textContent;
-  el.testSoundSub.textContent = 'Playing a test sound…';
+  const originalLabel = el.testSoundBtn.textContent;
+  el.testSoundBtn.textContent = '🔊 Playing…';
   speak('This is a test of the sound.', () => {
-    el.testSoundSub.textContent = "Didn't hear anything? Check your phone isn't muted (the physical mute switch on iPhone silences this), that media volume is up, and that a text-to-speech voice is installed under your device's accessibility settings.";
+    el.testSoundBtn.textContent = originalLabel;
+    const voiceNote = cachedVoices.length === 0
+      ? " This browser reports zero text-to-speech voices available — that's almost certainly why (a Chrome/Android compatibility gap, separate from your device's TTS setting)."
+      : '';
+    el.testSoundSub.textContent = "No sound?" + voiceNote + " On Android Chrome, also check the site's Sound permission under ⋮ menu → Site settings. On iPhone, check the physical mute switch on the side.";
   });
   setTimeout(() => {
-    if (el.testSoundSub.textContent === 'Playing a test sound…') el.testSoundSub.textContent = original;
-  }, 3500);
+    if (el.testSoundBtn.textContent === '🔊 Playing…') el.testSoundBtn.textContent = originalLabel;
+  }, 2500);
 });
 
 el.playBtn.addEventListener('click', () => {
@@ -1208,12 +1139,10 @@ el.playBtn.addEventListener('click', () => {
   el.randomNextBtn.innerHTML = arrowIcon('right', 20);
   // Some browsers need voices "warmed up" before speechSynthesis.speak()
   // reliably produces audio the first time it's used.
-  if (window.speechSynthesis) window.speechSynthesis.getVoices();
+  warmUpVoices();
   setupRecognition();
   renderFontOptions();
   renderAutoPlayToggle();
-  updatePracticeFabBadge();
-  updateMissedTabLabel();
   renderMap();
   // land on whichever level the player is currently on, not level 1
   requestAnimationFrame(() => { centerOnLevel(unlockedLevel()); });

@@ -478,101 +478,6 @@ button { font-family: inherit; }
 }
 .definition-close:hover { background: var(--accent-soft); color: var(--paper); }
 
-/* ---------- Practice view toggle (Cards / Missed Words) ---------- */
-#cardsView {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-}
-
-.view-toggle {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-.view-tab {
-  border: 1px solid var(--panel-border);
-  background: transparent;
-  color: #cfcbd8;
-  font-family: 'Work Sans', sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  padding: 8px 16px;
-  border-radius: 20px;
-  cursor: pointer;
-}
-.view-tab.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--paper);
-}
-
-/* ---------- Missed words bank ---------- */
-.missed-view {
-  width: 100%;
-  max-width: 420px;
-  margin: 0 auto;
-  padding-bottom: 20px;
-}
-.missed-empty {
-  color: var(--text-dim);
-  font-size: 13px;
-  text-align: center;
-  padding: 30px 20px;
-}
-.missed-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.missed-word-row {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-  padding: 14px 16px;
-}
-.missed-word-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.missed-word-text {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--paper);
-}
-.missed-word-def {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--panel-border);
-  font-size: 13px;
-  color: #cfcbd8;
-  line-height: 1.55;
-}
-.missed-word-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.mini-icon-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: none;
-  background: var(--accent-soft);
-  color: var(--paper);
-  font-size: 13px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.mini-icon-btn:hover { background: #46414f; }
-.mini-icon-btn.remove { background: transparent; border: 1px solid var(--panel-border); color: #d99c96; }
-.mini-icon-btn.remove:hover { border-color: var(--hard); color: var(--hard); }
-
 .result-banner {
   font-size: 14px;
   font-weight: 600;
@@ -640,22 +545,6 @@ button { font-family: inherit; }
 }
 .fab-practice:active { transform: scale(0.96); }
 
-.fab-badge {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 10px;
-  background: var(--hard);
-  color: #fbe9e6;
-  font-size: 11px;
-  font-weight: 700;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid var(--bg-app);
-}
 
 /* ---------- Icon arrow buttons (reused by back/next/random-nav) ---------- */
 .back-btn span,

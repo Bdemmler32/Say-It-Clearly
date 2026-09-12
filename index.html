@@ -16,7 +16,7 @@
     <div class="app-name">Say It Clearly<span>.</span></div>
     <div class="topbar-right">
       <div class="points-badge"><span class="dot"></span><span id="pointsValue">0</span> pts</div>
-      <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings" type="button">⚙</button>
     </div>
   </div>
 
@@ -26,20 +26,20 @@
       <div class="map-track" id="mapTrack"></div>
     </div>
 
-    <button class="fab-practice" id="practiceFab">Practice<span class="fab-badge" id="fabBadge" style="display:none;"></span></button>
+    <button class="fab-practice" id="practiceFab" type="button">Practice</button>
 
     <!-- Welcome splash — dismissed by the Play button, map is already full-screen behind it -->
     <div class="welcome-overlay" id="welcomeOverlay">
       <div class="welcome-panel">
         <div class="welcome-title">Say It Clearly<span>.</span></div>
         <div class="welcome-sub">Pick a level to start speaking.</div>
-        <button class="play-btn" id="playBtn">▶ Play</button>
+        <button class="play-btn" id="playBtn" type="button">▶ Play</button>
       </div>
     </div>
 
     <div class="practice-overlay" id="practiceOverlay">
       <div class="practice-header">
-        <button class="back-btn" id="backBtn"><span id="backIcon"></span> Map</button>
+        <button class="back-btn" id="backBtn" type="button"><span id="backIcon"></span> Map</button>
         <div class="level-pill" id="levelPill"></div>
       </div>
 
@@ -56,9 +56,9 @@
 
       <!-- Mic-only controls. There is intentionally no text input anywhere. -->
       <div class="mic-area" id="micArea">
-        <button class="mic-btn" id="micBtn" aria-label="Start speaking">🎙</button>
+        <button class="mic-btn" id="micBtn" aria-label="Start speaking" type="button">🎙</button>
         <div class="mic-status" id="micStatus">Tap the mic and say the phrase</div>
-        <button class="hear-btn" id="hearBtn" style="display:none;">🔊 Hear it</button>
+        <button class="hear-btn" id="hearBtn" style="display:none;" type="button">🔊 Hear it</button>
       </div>
 
       <div class="no-support-msg" id="noSupportMsg" style="display:none;">
@@ -67,14 +67,14 @@
 
       <!-- Tap any word on the card to see its definition. -->
       <div class="definition-panel" id="definitionPanel" style="display:none;">
-        <button class="definition-close" id="definitionClose" aria-label="Close definition">✕</button>
+        <button class="definition-close" id="definitionClose" aria-label="Close definition" type="button">✕</button>
         <div class="definition-word" id="definitionWord"></div>
         <div class="definition-text" id="definitionText"></div>
       </div>
 
       <div class="practice-actions">
-        <button class="action-btn" id="skipBtn">Skip (10 pts)</button>
-        <button class="action-btn primary" id="nextBtn" style="display:none;">Next level <span id="nextIcon"></span></button>
+        <button class="action-btn" id="skipBtn" type="button">Skip (10 pts)</button>
+        <button class="action-btn primary" id="nextBtn" style="display:none;" type="button">Next level <span id="nextIcon"></span></button>
       </div>
     </div>
 
@@ -83,59 +83,44 @@
          the arrows always browse freely regardless of whether the mic caught it. -->
     <div class="practice-overlay" id="randomOverlay">
       <div class="practice-header">
-        <button class="back-btn" id="randomBackBtn"><span id="randomBackIcon"></span> Map</button>
+        <button class="back-btn" id="randomBackBtn" type="button"><span id="randomBackIcon"></span> Map</button>
         <div class="level-pill" id="randomPill">Practice</div>
       </div>
 
-      <div class="view-toggle" id="viewToggle">
-        <button class="view-tab active" id="tabCards">Cards</button>
-        <button class="view-tab" id="tabMissed">Missed Words (0)</button>
-      </div>
+      <div class="filter-row" id="filterRow"></div>
 
-      <div id="cardsView">
-        <div class="filter-row" id="filterRow"></div>
-
-        <div class="deck">
-          <div class="stack-card s2"></div>
-          <div class="stack-card s1"></div>
-          <div class="card" id="randomCard">
-            <div class="card-text" id="randomCardText"></div>
-            <div class="card-focus-tag" id="randomFocusTag"></div>
-          </div>
-        </div>
-
-        <div class="result-banner" id="randomResultBanner" style="display:none;"></div>
-
-        <div class="mic-area" id="randomMicArea">
-          <button class="mic-btn" id="randomMicBtn" aria-label="Start speaking">🎙</button>
-          <div class="mic-status" id="randomMicStatus">Tap the mic and say the phrase</div>
-          <button class="hear-btn" id="randomHearBtn" style="display:none;">🔊 Hear it</button>
-        </div>
-
-        <div class="no-support-msg" id="randomNoSupportMsg" style="display:none;">
-          Speech recognition isn't available in this browser — you can still browse cards with the arrows.
-        </div>
-
-        <!-- Tap any word to hear it and see its definition. -->
-        <div class="definition-panel" id="randomDefinitionPanel" style="display:none;">
-          <button class="definition-close" id="randomDefinitionClose" aria-label="Close definition">✕</button>
-          <div class="definition-word" id="randomDefinitionWord"></div>
-          <div class="definition-text" id="randomDefinitionText"></div>
-        </div>
-
-        <div class="random-nav">
-          <button class="circle-arrow-btn" id="randomPrevBtn" aria-label="Previous card"></button>
-          <div class="counter" id="randomCounter"></div>
-          <button class="circle-arrow-btn" id="randomNextBtn" aria-label="Next card"></button>
+      <div class="deck">
+        <div class="stack-card s2"></div>
+        <div class="stack-card s1"></div>
+        <div class="card" id="randomCard">
+          <div class="card-text" id="randomCardText"></div>
+          <div class="card-focus-tag" id="randomFocusTag"></div>
         </div>
       </div>
 
-      <!-- A standalone vocabulary tool: every word you've gotten wrong,
-           independent of which phrase it came from. Hear it, look up its
-           definition, or remove it once you've learned it. -->
-      <div class="missed-view" id="missedView" style="display:none;">
-        <div class="missed-empty" id="missedEmpty">No missed words yet — they'll show up here as you practice.</div>
-        <div class="missed-list" id="missedList"></div>
+      <div class="result-banner" id="randomResultBanner" style="display:none;"></div>
+
+      <div class="mic-area" id="randomMicArea">
+        <button class="mic-btn" id="randomMicBtn" aria-label="Start speaking" type="button">🎙</button>
+        <div class="mic-status" id="randomMicStatus">Tap the mic and say the phrase</div>
+        <button class="hear-btn" id="randomHearBtn" style="display:none;" type="button">🔊 Hear it</button>
+      </div>
+
+      <div class="no-support-msg" id="randomNoSupportMsg" style="display:none;">
+        Speech recognition isn't available in this browser — you can still browse cards with the arrows.
+      </div>
+
+      <!-- Tap any word to hear it and see its definition. -->
+      <div class="definition-panel" id="randomDefinitionPanel" style="display:none;">
+        <button class="definition-close" id="randomDefinitionClose" aria-label="Close definition" type="button">✕</button>
+        <div class="definition-word" id="randomDefinitionWord"></div>
+        <div class="definition-text" id="randomDefinitionText"></div>
+      </div>
+
+      <div class="random-nav">
+        <button class="circle-arrow-btn" id="randomPrevBtn" aria-label="Previous card" type="button"></button>
+        <div class="counter" id="randomCounter"></div>
+        <button class="circle-arrow-btn" id="randomNextBtn" aria-label="Next card" type="button"></button>
       </div>
     </div>
 
@@ -153,16 +138,16 @@
     <div class="settings-sub">Automatically move to the next level and keep the mic listening after each correct phrase.</div>
     <div class="toggle-row" id="autoPlayRow">
       <div class="toggle-label">Auto-play</div>
-      <button class="toggle-switch" id="autoPlayToggle" aria-label="Toggle auto-play"><span class="toggle-knob"></span></button>
+      <button class="toggle-switch" id="autoPlayToggle" aria-label="Toggle auto-play" type="button"><span class="toggle-knob"></span></button>
     </div>
 
     <div class="settings-title" style="margin-top:22px;">Audio</div>
     <div class="settings-sub" id="testSoundSub">Not hearing "Hear it" or tap-to-hear? Try a quick test, then check your phone isn't muted and has a text-to-speech voice installed (Settings → Accessibility on most phones).</div>
-    <button class="action-btn" id="testSoundBtn" style="width:100%;">🔊 Test sound</button>
+    <button class="action-btn" id="testSoundBtn" style="width:100%;" type="button">🔊 Test sound</button>
 
     <div class="settings-footer">
-      <button class="reset-link" id="resetBtn">Reset progress</button>
-      <button class="close-settings" id="closeSettingsBtn">Done</button>
+      <button class="reset-link" id="resetBtn" type="button">Reset progress</button>
+      <button class="close-settings" id="closeSettingsBtn" type="button">Done</button>
     </div>
   </div>
 </div>

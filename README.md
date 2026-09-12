@@ -73,7 +73,7 @@ there's no points system, so it's just there to help, with no cost.
 In Practice, you can also tap any word directly to hear it — no need
 to wait for a mistake.
 
-### Definitions and missed-word review
+### Definitions
 
 Tap any word on a card (in either Levels or Practice) to look up its
 definition — shown right on the card with a close (✕) button, no
@@ -85,26 +85,35 @@ remake" for those — when every candidate definition is just an
 inflection pointer like that, the lookup chases it back to the real
 word and shows its actual meaning instead. Word text has native
 text-selection disabled so your phone's built-in "Look Up" popup
-doesn't fire and conflict with this.
+doesn't fire and conflict with this. Hyphenated words ("low-roofed")
+are spoken and defined as the whole compound, not as orphaned halves.
 
-A word only gets added to the **Missed Words** bank once the
-recognizer has actually *finalized* hearing something else there —
-not from a fleeting interim guess while you're still mid-word, which
-previously caused false positives on longer words. In Practice, a
-"Missed Words" tab lists every word you've struggled with (as its own
-word, independent of which phrase it came from) with 🔊 hear, "Aa"
-definition, and ✕ remove controls, so you can build vocabulary
-directly rather than re-drilling whole sentences. The Practice button
-shows a small badge with your missed-word count. Hyphenated words
-("low-roofed") are tracked, spoken, and defined as the whole compound,
-not as orphaned halves.
+A word only turns red once the recognizer has actually *finalized*
+hearing something else there — not from a fleeting interim guess while
+you're still mid-word, which previously caused false "wrong" flags on
+longer words.
 
 Best support: Chrome on Android/desktop, Safari on iOS/macOS. Requires
 mic permission and (for most browsers) HTTPS — which GitHub Pages
-gives you automatically. If "Hear it" or tap-to-hear produce no sound,
-Settings has a "Test sound" button to check independently of the game
-— common causes are a muted device (the iPhone's physical mute switch
-silences this) or no text-to-speech voice installed at the OS level.
+gives you automatically.
+
+### If "Hear it" or tap-to-hear produce no sound
+
+This is a genuinely tricky one to debug without a physical device, and
+speech synthesis bugs are common and inconsistent across mobile
+browsers. Settings has a "Test sound" button to check independent of
+gameplay. If that's also silent, the most common real-world causes are:
+
+- **iPhone**: the physical mute switch on the side silences this, even
+  with the volume turned up — this is different from the
+  Accessibility → Spoken Content setting.
+- **Android Chrome**: the site's "Sound" permission can be individually
+  blocked under Site settings, separate from the device's system-level
+  text-to-speech engine.
+- Some in-app browsers (opening a link inside Instagram, Facebook,
+  etc.) restrict speech APIs beyond what a normal browser allows — try
+  opening the link in Safari/Chrome directly if you're testing inside
+  one of those.
 
 ## Storage
 
