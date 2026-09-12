@@ -4,7 +4,7 @@
 // touch. Changing it makes the browser treat this as a new service worker,
 // which triggers install/activate again and — critically — deletes the old
 // cache in activate() below, so nothing stale can ever linger in storage.
-const VERSION = 'v3';
+const VERSION = 'v6';
 const CACHE_NAME = 'say-it-clearly-' + VERSION;
 
 const CORE_ASSETS = [
@@ -20,6 +20,7 @@ const CORE_ASSETS = [
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
   './icons/favicon-48.png',
+  './icons/bg-texture.webp',
 ];
 
 self.addEventListener('install', (event) => {

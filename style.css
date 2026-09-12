@@ -28,7 +28,12 @@ html, body { height: 100%; }
 
 body {
   margin: 0;
-  background: radial-gradient(circle at 20% 10%, var(--bg-app-2), var(--bg-app) 65%);
+  background-image: url('icons/bg-texture.webp'), radial-gradient(circle at 20% 10%, var(--bg-app-2), var(--bg-app) 65%);
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center;
+  /* Fill the screen on every size now (was contain/fit on mobile before). */
+  background-size: cover, cover;
+  background-attachment: fixed, fixed;
   font-family: 'Work Sans', sans-serif;
   color: var(--paper);
   overflow: hidden;

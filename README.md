@@ -19,7 +19,9 @@ microphone.
   settings, storage.
 - `manifest.json` — makes the game installable as an app (PWA).
 - `sw.js` — service worker for offline support and cache control.
-- `icons/` — app icons for the home screen / install prompt.
+- `icons/` — app icons for the home screen / install prompt, plus
+  `bg-texture.webp`, a faint decorative texture layered over the
+  background gradient.
 
 ## Installing it as an app (PWA)
 
