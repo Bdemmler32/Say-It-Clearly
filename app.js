@@ -121,6 +121,7 @@ const state = {
   points: 0,
   levelStatus: {},   // { [levelIndex]: 'completed' | 'skipped' }
   font: 'handwritten',
+  autoPlay: false,
   openLevel: null,
 };
 
@@ -133,13 +134,15 @@ const FONT_OPTIONS = [
 
 function unlockedLevel() {
   const keys = Object.keys(state.levelStatus).map(Number);
-  return keys.length ? Math.max(...keys) + 1 : 1;
+  const n = keys.length ? Math.max(...keys) + 1 : 1;
+  return Math.min(n, TOTAL_LEVELS);
 }
 
 async function loadState() {
   state.points = await Store.get('points', 0);
   state.levelStatus = await Store.get('levelStatus', {});
   state.font = await Store.get('font', 'handwritten');
+  state.autoPlay = await Store.get('autoPlay', false);
 }
 
 async function persistProgress() {
@@ -149,6 +152,10 @@ async function persistProgress() {
 
 async function persistFont() {
   await Store.set('font', state.font);
+}
+
+async function persistAutoPlay() {
+  await Store.set('autoPlay', state.autoPlay);
 }
 
 // -----------------------------------------------------------
@@ -168,6 +175,7 @@ const el = {
   micBtn: document.getElementById('micBtn'),
   micStatus: document.getElementById('micStatus'),
   micArea: document.getElementById('micArea'),
+  hearBtn: document.getElementById('hearBtn'),
   noSupportMsg: document.getElementById('noSupportMsg'),
   resultBanner: document.getElementById('resultBanner'),
   skipBtn: document.getElementById('skipBtn'),
@@ -183,11 +191,18 @@ const el = {
   randomPrevBtn: document.getElementById('randomPrevBtn'),
   randomNextBtn: document.getElementById('randomNextBtn'),
   randomBackBtn: document.getElementById('randomBackBtn'),
+  randomMicBtn: document.getElementById('randomMicBtn'),
+  randomMicStatus: document.getElementById('randomMicStatus'),
+  randomMicArea: document.getElementById('randomMicArea'),
+  randomHearBtn: document.getElementById('randomHearBtn'),
+  randomResultBanner: document.getElementById('randomResultBanner'),
+  randomNoSupportMsg: document.getElementById('randomNoSupportMsg'),
   filterRow: document.getElementById('filterRow'),
   settingsBtn: document.getElementById('settingsBtn'),
   settingsOverlay: document.getElementById('settingsOverlay'),
   closeSettingsBtn: document.getElementById('closeSettingsBtn'),
   fontOptions: document.getElementById('fontOptions'),
+  autoPlayToggle: document.getElementById('autoPlayToggle'),
   resetBtn: document.getElementById('resetBtn'),
 };
 
@@ -285,13 +300,25 @@ function renderMap() {
   el.pointsValue.textContent = state.points;
 }
 
+// Center the map's scroll position on a given level (used on load, and
+// whenever we return to the map, so the player's current level is
+// always visible instead of the view resetting to level 1).
+function centerOnLevel(n) {
+  const y = yPxForLevel(n);
+  const target = y - el.mapWrap.clientHeight / 2;
+  const max = el.mapTrack.offsetHeight - el.mapWrap.clientHeight;
+  el.mapWrap.scrollTop = Math.max(0, Math.min(target, max));
+}
+
 // -----------------------------------------------------------
-// Practice panel
+// Practice panel — shared "attempt" engine used by both Levels and
+// the Practice (random) screen. An attempt tracks one phrase being
+// spoken: its words, per-word status, and whether a pronunciation
+// hint was used (which forfeits points, levels only).
 // -----------------------------------------------------------
 let recognition = null;
 let recognizing = false;
-let targetWords = [];
-let matchedCount = 0;
+let attempt = null; // { mode: 'level'|'practice', text, rawWords, seps, targetWords, statuses, matchedCount, hasMistake, assisted, levelIndex? }
 
 function normalizeWord(w) {
   return w.toLowerCase().replace(/[^a-z']/g, '');
@@ -317,6 +344,86 @@ function wordsRoughlyMatch(a, b) {
   return false;
 }
 
+// Split on spaces AND hyphens, but remember which separator followed each
+// word so hyphenated compounds ("low-roofed") render as two independently
+// highlightable words with no gap between them — and, crucially, are
+// matched against speech as two separate words, since that's how people
+// actually say them.
+function tokenizePhrase(text) {
+  const parts = text.split(/(\s+|-)/).filter(p => p.length > 0);
+  const rawWords = [];
+  const seps = [];
+  let i = 0;
+  while (i < parts.length) {
+    rawWords.push(parts[i]);
+    i++;
+    if (i < parts.length && /^(\s+|-)$/.test(parts[i])) {
+      seps.push(parts[i] === '-' ? '-' : ' ');
+      i++;
+    } else {
+      seps.push('');
+    }
+  }
+  return { rawWords, seps };
+}
+
+function freshWordStatuses(len) {
+  return Array.from({ length: len }, (_, i) => (i === 0 ? 'current' : 'pending'));
+}
+
+function buildAttempt(text, mode, extra) {
+  const { rawWords, seps } = tokenizePhrase(text);
+  return Object.assign({
+    mode,
+    text,
+    rawWords,
+    seps,
+    targetWords: rawWords.map(normalizeWord),
+    statuses: freshWordStatuses(rawWords.length),
+    matchedCount: 0,
+    hasMistake: false,
+    assisted: false,
+  }, extra || {});
+}
+
+function renderAttempt(a) {
+  const cardTextEl = a.mode === 'level' ? el.cardText : el.randomCardText;
+  const classFor = { correct: 'matched', current: 'current-word', incorrect: 'incorrect-word' };
+  let html = '';
+  a.rawWords.forEach((w, i) => {
+    const cls = classFor[a.statuses[i]];
+    html += `<span class="word${cls ? ' ' + cls : ''}">${w}</span>`;
+    if (a.seps[i] === '-') html += '-';
+    else if (a.seps[i] === ' ') html += ' ';
+  });
+  cardTextEl.innerHTML = html;
+}
+
+function activeEls() {
+  if (!attempt) return null;
+  return attempt.mode === 'level'
+    ? { micBtn: el.micBtn, micStatus: el.micStatus, hearBtn: el.hearBtn, resultBanner: el.resultBanner }
+    : { micBtn: el.randomMicBtn, micStatus: el.randomMicStatus, hearBtn: el.randomHearBtn, resultBanner: el.randomResultBanner };
+}
+
+// Native text-to-speech for the "Hear it" pronunciation hint — no
+// external service, just the browser's built-in SpeechSynthesis.
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.82;
+  u.lang = 'en-US';
+  window.speechSynthesis.speak(u);
+}
+
+function useHearIt() {
+  if (!attempt) return;
+  attempt.assisted = true;
+  const word = attempt.rawWords[attempt.matchedCount] || attempt.text;
+  speak(word);
+}
+
 function openLevel(n) {
   state.openLevel = n;
   const { difficulty, phrase } = levelPhrase(n);
@@ -327,12 +434,12 @@ function openLevel(n) {
   el.card.className = 'card difficulty-' + difficulty;
   el.cardFocusTag.textContent = phrase.focus;
 
-  targetWords = phrase.text.split(' ').map(normalizeWord);
-  matchedCount = 0;
-  renderCardWords(phrase.text);
+  attempt = buildAttempt(phrase.text, 'level', { levelIndex: n });
+  renderAttempt(attempt);
 
   el.resultBanner.style.display = 'none';
   el.nextBtn.style.display = 'none';
+  el.hearBtn.style.display = 'none';
   el.skipBtn.style.display = state.levelStatus[n] ? 'none' : 'inline-block';
   updateSkipButton();
   el.micStatus.textContent = 'Tap the mic and say the phrase';
@@ -341,18 +448,13 @@ function openLevel(n) {
   el.practiceOverlay.classList.add('open');
 }
 
-function renderCardWords(text) {
-  const words = text.split(' ');
-  el.cardText.innerHTML = words
-    .map((w, i) => `<span class="word${i < matchedCount ? ' matched' : ''}">${w}</span>`)
-    .join(' ');
-}
-
 function closeLevel() {
   if (recognizing) stopRecognition();
   state.openLevel = null;
+  attempt = null;
   el.practiceOverlay.classList.remove('open');
   renderMap();
+  centerOnLevel(unlockedLevel());
 }
 
 function updateSkipButton() {
@@ -362,8 +464,11 @@ function updateSkipButton() {
     : `Skip (${SKIP_COST} pts)`;
 }
 
-async function completeLevel(n, awardPoints) {
+async function completeLevel(n, opts) {
+  const awardPoints = !!(opts && opts.awardPoints);
+  const assisted = !!(opts && opts.assisted);
   const alreadyDone = !!state.levelStatus[n];
+  const thisAttempt = attempt;
   state.levelStatus[n] = 'completed';
   if (awardPoints && !alreadyDone) {
     const { difficulty } = levelPhrase(n);
@@ -373,9 +478,24 @@ async function completeLevel(n, awardPoints) {
   el.pointsValue.textContent = state.points;
   el.resultBanner.style.display = 'block';
   el.resultBanner.className = 'result-banner success';
-  el.resultBanner.textContent = alreadyDone ? 'Nice — practiced again!' : 'Level complete!';
+  el.resultBanner.textContent = (!alreadyDone && assisted)
+    ? 'Level complete — no points (pronunciation help used)'
+    : 'Level complete!';
   el.nextBtn.style.display = 'inline-block';
   el.skipBtn.style.display = 'none';
+  el.hearBtn.style.display = 'none';
+
+  if (state.autoPlay) {
+    const next = n + 1;
+    setTimeout(() => {
+      // Only advance if we're still on the attempt that just finished —
+      // i.e. the player hasn't already navigated away manually.
+      if (attempt === thisAttempt && next <= TOTAL_LEVELS && next <= unlockedLevel()) {
+        openLevel(next);
+        startRecognition();
+      }
+    }, 1100);
+  }
 }
 
 async function skipLevel() {
@@ -390,6 +510,7 @@ async function skipLevel() {
   el.resultBanner.textContent = 'Level skipped.';
   el.nextBtn.style.display = 'inline-block';
   el.skipBtn.style.display = 'none';
+  el.hearBtn.style.display = 'none';
 }
 
 // ---------- Speech recognition (mic only — no keyboard input anywhere) ----------
@@ -399,6 +520,8 @@ function setupRecognition() {
   if (!SpeechRecognitionAPI) {
     el.micArea.style.display = 'none';
     el.noSupportMsg.style.display = 'block';
+    el.randomMicArea.style.display = 'none';
+    el.randomNoSupportMsg.style.display = 'block';
     return;
   }
   recognition = new SpeechRecognitionAPI();
@@ -407,58 +530,93 @@ function setupRecognition() {
   recognition.lang = 'en-US';
 
   recognition.onresult = (event) => {
+    // Ignore stray events fired after we've already stopped listening —
+    // some browsers deliver one more "result" after stop() is called,
+    // which previously caused a level to be marked complete twice.
+    if (!recognizing || !attempt) return;
+
     let transcript = '';
     for (let i = 0; i < event.results.length; i++) {
       transcript += event.results[i][0].transcript + ' ';
     }
     const spoken = transcript.trim().split(/\s+/).map(normalizeWord).filter(Boolean);
 
+    // Recompute word-by-word status fresh from the full transcript each time,
+    // so interim results that get revised by the recognizer self-correct.
+    const target = attempt.targetWords;
+    const statuses = target.map(() => 'pending');
     let pointer = 0;
+    let sawMistake = false;
     for (const w of spoken) {
-      if (pointer < targetWords.length && wordsRoughlyMatch(w, targetWords[pointer])) {
+      if (pointer >= target.length) break;
+      if (wordsRoughlyMatch(w, target[pointer])) {
+        statuses[pointer] = 'correct';
         pointer++;
+      } else {
+        statuses[pointer] = 'incorrect';
+        sawMistake = true;
       }
     }
-    matchedCount = pointer;
-    const currentPhrase = el.cardText.textContent.trim();
-    renderCardWords(levelPhrase(state.openLevel).phrase.text);
+    if (pointer < target.length && statuses[pointer] !== 'incorrect') {
+      statuses[pointer] = 'current';
+    }
+    attempt.statuses = statuses;
+    attempt.matchedCount = pointer;
+    if (sawMistake) attempt.hasMistake = true;
+    renderAttempt(attempt);
 
-    if (matchedCount >= targetWords.length) {
+    const els = activeEls();
+    if (attempt.hasMistake) els.hearBtn.style.display = 'inline-flex';
+
+    if (pointer >= target.length) {
       stopRecognition();
-      completeLevel(state.openLevel, true);
+      if (attempt.mode === 'level') {
+        completeLevel(attempt.levelIndex, { awardPoints: !attempt.assisted, assisted: attempt.assisted });
+      } else {
+        completeRandomCard();
+      }
     }
   };
 
   recognition.onerror = (event) => {
+    const els = activeEls();
+    if (!els) return;
     if (event.error === 'no-speech') {
-      el.micStatus.textContent = "Didn't catch that — tap the mic and try again";
+      els.micStatus.textContent = "Didn't catch that — tap the mic and try again";
     } else if (event.error === 'not-allowed' || event.error === 'permission-denied') {
-      el.micStatus.textContent = 'Microphone access is blocked — enable it in your browser settings';
+      els.micStatus.textContent = 'Microphone access is blocked — enable it in your browser settings';
     } else {
-      el.micStatus.textContent = 'Something went wrong — tap the mic to retry';
+      els.micStatus.textContent = 'Something went wrong — tap the mic to retry';
     }
     stopRecognition();
   };
 
   recognition.onend = () => {
     recognizing = false;
-    el.micBtn.classList.remove('listening');
-    if (matchedCount < targetWords.length && matchedCount > 0) {
-      el.micStatus.textContent = 'Not quite — tap the mic to try again';
+    const els = activeEls();
+    if (!els) return;
+    els.micBtn.classList.remove('listening');
+    if (attempt && attempt.matchedCount < attempt.targetWords.length && attempt.matchedCount > 0) {
+      els.micStatus.textContent = 'Not quite — tap the mic to try again';
     }
   };
 }
 
 function startRecognition() {
-  if (!recognition) return;
-  matchedCount = 0;
-  renderCardWords(levelPhrase(state.openLevel).phrase.text);
-  el.resultBanner.style.display = 'none';
+  if (!recognition || !attempt) return;
+  attempt.matchedCount = 0;
+  attempt.statuses = freshWordStatuses(attempt.rawWords.length);
+  attempt.hasMistake = false;
+  attempt.assisted = false;
+  renderAttempt(attempt);
+  const els = activeEls();
+  els.resultBanner.style.display = 'none';
+  els.hearBtn.style.display = 'none';
   try {
     recognition.start();
     recognizing = true;
-    el.micBtn.classList.add('listening');
-    el.micStatus.textContent = 'Listening…';
+    els.micBtn.classList.add('listening');
+    els.micStatus.textContent = 'Listening…';
   } catch (e) {
     // recognition already started
   }
@@ -468,16 +626,20 @@ function stopRecognition() {
   if (!recognition) return;
   try { recognition.stop(); } catch (e) {}
   recognizing = false;
-  el.micBtn.classList.remove('listening');
+  const els = activeEls();
+  if (els) els.micBtn.classList.remove('listening');
 }
 
-el.micBtn.addEventListener('click', () => {
+function handleMicToggle() {
   if (recognizing) {
     stopRecognition();
   } else {
     startRecognition();
   }
-});
+}
+
+el.micBtn.addEventListener('click', handleMicToggle);
+el.hearBtn.addEventListener('click', useHearIt);
 
 el.skipBtn.addEventListener('click', skipLevel);
 el.backBtn.addEventListener('click', closeLevel);
@@ -499,7 +661,9 @@ function arrowIcon(direction, size) {
 
 // -----------------------------------------------------------
 // Random practice: shuffles through every phrase in the database.
-// No points, no mic, no levels — just forward/back through cards.
+// No points, no levels — but the mic, word highlighting, and Auto-Play
+// all work the same way as Levels. Arrows always browse freely,
+// whether or not the current card has been spoken correctly.
 // -----------------------------------------------------------
 let randomOrder = [];
 let randomIndex = 0;
@@ -531,7 +695,7 @@ function renderFilterRow() {
       renderFilterRow();
       randomOrder = shuffledFilteredPhrases();
       randomIndex = 0;
-      renderRandomCard();
+      loadRandomCard();
     });
     el.filterRow.appendChild(btn);
   });
@@ -541,34 +705,64 @@ function openRandomPractice() {
   renderFilterRow();
   randomOrder = shuffledFilteredPhrases();
   randomIndex = 0;
-  renderRandomCard();
+  loadRandomCard();
   el.randomOverlay.classList.add('open');
 }
 
-function renderRandomCard() {
+function loadRandomCard() {
+  if (recognizing) stopRecognition();
   const phrase = randomOrder[randomIndex];
   el.randomCard.className = 'card difficulty-' + phrase.difficulty;
-  el.randomCardText.textContent = phrase.text;
   el.randomFocusTag.textContent = phrase.focus;
   el.randomPill.className = 'level-pill difficulty-' + phrase.difficulty;
   el.randomPill.textContent = 'Practice · ' + phrase.difficulty[0].toUpperCase() + phrase.difficulty.slice(1);
   el.randomCounter.textContent = (randomIndex + 1) + ' / ' + randomOrder.length;
+
+  attempt = buildAttempt(phrase.text, 'practice');
+  renderAttempt(attempt);
+  el.randomResultBanner.style.display = 'none';
+  el.randomHearBtn.style.display = 'none';
+  el.randomMicStatus.textContent = 'Tap the mic and say the phrase';
+  el.randomMicBtn.classList.remove('listening');
+}
+
+function completeRandomCard() {
+  const thisAttempt = attempt;
+  el.randomResultBanner.style.display = 'block';
+  el.randomResultBanner.className = 'result-banner success';
+  el.randomResultBanner.textContent = 'Correct!';
+  el.randomHearBtn.style.display = 'none';
+
+  if (state.autoPlay) {
+    setTimeout(() => {
+      // Only auto-advance if the player hasn't already navigated away.
+      if (attempt === thisAttempt) {
+        randomIndex = (randomIndex + 1) % randomOrder.length;
+        loadRandomCard();
+        startRecognition();
+      }
+    }, 1100);
+  }
 }
 
 function closeRandomPractice() {
+  if (recognizing) stopRecognition();
+  attempt = null;
   el.randomOverlay.classList.remove('open');
   renderMap();
 }
 
 el.practiceFab.addEventListener('click', openRandomPractice);
 el.randomBackBtn.addEventListener('click', closeRandomPractice);
+el.randomMicBtn.addEventListener('click', handleMicToggle);
+el.randomHearBtn.addEventListener('click', useHearIt);
 el.randomPrevBtn.addEventListener('click', () => {
   randomIndex = (randomIndex - 1 + randomOrder.length) % randomOrder.length;
-  renderRandomCard();
+  loadRandomCard();
 });
 el.randomNextBtn.addEventListener('click', () => {
   randomIndex = (randomIndex + 1) % randomOrder.length;
-  renderRandomCard();
+  loadRandomCard();
 });
 
 // -----------------------------------------------------------
@@ -608,7 +802,15 @@ el.resetBtn.addEventListener('click', async () => {
   await persistProgress();
   el.settingsOverlay.classList.remove('open');
   closeLevel();
-  renderMap();
+});
+
+function renderAutoPlayToggle() {
+  el.autoPlayToggle.classList.toggle('on', state.autoPlay);
+}
+el.autoPlayToggle.addEventListener('click', async () => {
+  state.autoPlay = !state.autoPlay;
+  renderAutoPlayToggle();
+  await persistAutoPlay();
 });
 
 el.playBtn.addEventListener('click', () => {
@@ -631,7 +833,8 @@ el.playBtn.addEventListener('click', () => {
   el.randomNextBtn.innerHTML = arrowIcon('right', 20);
   setupRecognition();
   renderFontOptions();
+  renderAutoPlayToggle();
   renderMap();
-  // start scrolled to the bottom (level 1)
-  requestAnimationFrame(() => { el.mapWrap.scrollTop = el.mapWrap.scrollHeight; });
+  // land on whichever level the player is currently on, not level 1
+  requestAnimationFrame(() => { centerOnLevel(unlockedLevel()); });
 })();

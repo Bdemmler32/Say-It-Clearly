@@ -28,21 +28,48 @@ microphone.
   without the game needing to store a giant map — only your progress
   (points + which levels you've done) is saved.
 - Completing a level awards points: **1 for easy, 2 for medium, 3 for
-  hard.**
+  hard.** Using the "Hear it" pronunciation hint on a level means that
+  completion earns 0 points (you still progress, just no reward) —
+  try again later without the hint to earn points on that level.
 - Skipping a level costs **10 points** and is available any time you
   have enough.
+- The map always opens centered on whichever level you're currently
+  on, not level 1 — so refreshing or coming back doesn't lose your place.
 - To add levels, just add more phrases to `phrases.js` — the game pulls
   from whichever difficulty pool it needs and will keep generating new
   levels indefinitely as the map scrolls.
 
+## Practice mode
+
+The floating "Practice" button opens a separate, points-free mode that
+shuffles through every phrase in the database (filterable by Easy/
+Medium/Hard). It uses the exact same mic and word-highlighting engine
+as Levels — say the phrase, watch words turn green — but there's no
+progression: the arrows always move freely whether or not you got the
+current card right.
+
 ## Speech recognition
 
 Uses the browser's native `SpeechRecognition` (Web Speech API) — no
-external API keys or services. As you speak, words in the phrase turn
-green in order as they're recognized. There's no text input fallback
-by design — if the browser doesn't support speech recognition, the mic
-is hidden and a message explains it (you can still use the point-based
-skip to move on).
+external API keys or services. As you speak, each word in the phrase
+turns yellow (up next), green (correct), or red (didn't match) in
+real time. There's no text input fallback by design — if the browser
+doesn't support speech recognition, the mic is hidden and a message
+explains it (you can still use the point-based skip on Levels, or just
+browse cards with the arrows in Practice).
+
+Hyphenated words (e.g. "low-roofed") are matched as their separate
+spoken parts, not as one glued-together word, since that's how people
+actually say them — they still render as a single hyphenated word on
+the card, but each half can be marked correct/incorrect independently.
+
+### Pronunciation help ("Hear it")
+
+If a word comes back marked wrong, a "🔊 Hear it" button appears and
+reads that word aloud using the browser's built-in text-to-speech.
+Using it on a level means that level completes without earning points
+(you still progress) — it's a hint, not a shortcut. In Practice mode
+there's no points system, so it's just there to help, with no cost.
 
 Best support: Chrome on Android/desktop, Safari on iOS/macOS. Requires
 mic permission and (for most browsers) HTTPS — which GitHub Pages
