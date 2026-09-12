@@ -413,6 +413,12 @@ function buildAttempt(text, mode, extra) {
     targetWords: rawWords.map(normalizeWord),
     statuses: freshWordStatuses(rawWords.length),
     matchedCount: 0,
+    // How many words were already confirmed correct before the CURRENT
+    // recognition session started. Each call to recognition.start() begins
+    // a fresh transcript at index 0 — without this, resuming after any
+    // pause (auto-resume or a manual re-tap) would re-evaluate speech
+    // against the target from word one again, wiping out real progress.
+    sessionBaseline: 0,
     hasMistake: false,
     assisted: false,
   }, extra || {});
@@ -803,8 +809,13 @@ function setupRecognition() {
     // judged at all until the recognizer itself is done with it.
     const finalSpoken = finalTranscript.trim().split(/\s+/).map(normalizeWord).filter(Boolean);
     const target = attempt.targetWords;
-    const statuses = target.map(() => 'pending');
-    let pointer = 0;
+    // Seed with whatever was already confirmed correct in a PRIOR listening
+    // session (see sessionBaseline above) — this session's transcript only
+    // covers speech from the moment it started, so evaluation resumes from
+    // there instead of re-judging the whole phrase from word one.
+    const baseline = attempt.sessionBaseline || 0;
+    const statuses = target.map((_, i) => (i < baseline ? 'correct' : 'pending'));
+    let pointer = baseline;
     for (const w of finalSpoken) {
       if (pointer >= target.length) break;
 
@@ -931,6 +942,7 @@ function maybeAutoResume() {
     if (attempt.matchedCount >= attempt.targetWords.length) return;
     if (recognizing) return;
     try {
+      attempt.sessionBaseline = attempt.matchedCount;
       recognition.start();
       recognizing = true;
       const els = activeEls();
@@ -945,6 +957,7 @@ function maybeAutoResume() {
 function startRecognition() {
   if (!recognition || !attempt) return;
   userPaused = false;
+  attempt.sessionBaseline = attempt.matchedCount;
   const els = activeEls();
   els.resultBanner.style.display = 'none';
   els.hearBtn.style.display = 'none';
