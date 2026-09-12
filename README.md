@@ -79,21 +79,32 @@ Tap any word on a card (in either Levels or Practice) to look up its
 definition — shown right on the card with a close (✕) button, no
 separate app needed. Definitions come from Wikimedia's Wiktionary REST
 API first (reliable CORS support), falling back to a second free API
-if that's unavailable; if both fail, it says so rather than erroring.
-Word text has native text-selection disabled so your phone's built-in
-"Look Up" popup doesn't fire and conflict with this.
+if that's unavailable. Many sentence words are inflected forms
+("remade," "studies"), and dictionaries often just say "past tense of
+remake" for those — when every candidate definition is just an
+inflection pointer like that, the lookup chases it back to the real
+word and shows its actual meaning instead. Word text has native
+text-selection disabled so your phone's built-in "Look Up" popup
+doesn't fire and conflict with this.
 
-Any word that gets marked wrong (after the grace period, not on a
-fleeting mid-word flash) is added to a **Missed Words** bank —
-independent of which phrase it came from. In Practice, a "Missed
-Words" tab lists every word you've struggled with, each with its own
-🔊 hear, "Aa" definition, and ✕ remove controls, so you can build
-vocabulary directly rather than re-drilling whole sentences. The
-Practice button also shows a small badge with your missed-word count.
+A word only gets added to the **Missed Words** bank once the
+recognizer has actually *finalized* hearing something else there —
+not from a fleeting interim guess while you're still mid-word, which
+previously caused false positives on longer words. In Practice, a
+"Missed Words" tab lists every word you've struggled with (as its own
+word, independent of which phrase it came from) with 🔊 hear, "Aa"
+definition, and ✕ remove controls, so you can build vocabulary
+directly rather than re-drilling whole sentences. The Practice button
+shows a small badge with your missed-word count. Hyphenated words
+("low-roofed") are tracked, spoken, and defined as the whole compound,
+not as orphaned halves.
 
 Best support: Chrome on Android/desktop, Safari on iOS/macOS. Requires
 mic permission and (for most browsers) HTTPS — which GitHub Pages
-gives you automatically.
+gives you automatically. If "Hear it" or tap-to-hear produce no sound,
+Settings has a "Test sound" button to check independently of the game
+— common causes are a muted device (the iPhone's physical mute switch
+silences this) or no text-to-speech voice installed at the OS level.
 
 ## Storage
 

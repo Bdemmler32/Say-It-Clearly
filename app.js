@@ -242,6 +242,8 @@ const el = {
   closeSettingsBtn: document.getElementById('closeSettingsBtn'),
   fontOptions: document.getElementById('fontOptions'),
   autoPlayToggle: document.getElementById('autoPlayToggle'),
+  testSoundBtn: document.getElementById('testSoundBtn'),
+  testSoundSub: document.getElementById('testSoundSub'),
   resetBtn: document.getElementById('resetBtn'),
 };
 
@@ -410,6 +412,17 @@ function freshWordStatuses(len) {
   return Array.from({ length: len }, (_, i) => (i === 0 ? 'current' : 'pending'));
 }
 
+// For a hyphenated compound like "low-roofed" (tokenized as two separate
+// words for speech matching), reconstruct the full compound so definitions,
+// "Hear it", and the missed-words bank all deal with the real word rather
+// than a meaningless fragment like "roofed" on its own.
+function compoundWordAt(a, idx) {
+  let start = idx, end = idx;
+  while (start > 0 && a.seps[start - 1] === '-') start--;
+  while (end < a.rawWords.length - 1 && a.seps[end] === '-') end++;
+  return a.rawWords.slice(start, end + 1).join('-');
+}
+
 function buildAttempt(text, mode, extra) {
   const { rawWords, seps } = tokenizePhrase(text);
   return Object.assign({
@@ -452,7 +465,7 @@ function activeEls() {
 // A mismatch only gets rendered red after this much silence-free grace
 // period, so a word that's still being spoken doesn't flash red before
 // the person finishes saying it.
-const INCORRECT_DELAY_MS = 550;
+const INCORRECT_DELAY_MS = 700;
 let incorrectTimer = null;
 let incorrectTimerIndex = null;
 function clearIncorrectTimer() {
@@ -475,13 +488,26 @@ function speak(text, onFail) {
   try { synth.cancel(); } catch (e) { /* nothing was playing */ }
   const utter = new SpeechSynthesisUtterance(text);
   utter.rate = 0.82;
+  utter.volume = 1;
   utter.lang = 'en-US';
-  utter.onerror = () => { if (onFail) onFail(); };
+  try {
+    const voices = synth.getVoices ? synth.getVoices() : [];
+    const enVoice = voices && (voices.find(v => v.lang && v.lang.toLowerCase().startsWith('en')) || voices[0]);
+    if (enVoice) utter.voice = enVoice;
+  } catch (e) { /* fine to leave voice unset */ }
+  let settled = false;
+  utter.onstart = () => { settled = true; };
+  utter.onend = () => { settled = true; };
+  utter.onerror = () => { settled = true; if (onFail) onFail(); };
   try {
     synth.speak(utter);
   } catch (e) {
     if (onFail) onFail();
+    return;
   }
+  // If neither onstart, onend, nor onerror ever fires, something's silently
+  // wrong (often a device-level issue — see the Settings "Test sound" note).
+  setTimeout(() => { if (!settled && onFail) onFail(); }, 3000);
 }
 
 function flashMicStatus(els, message) {
@@ -496,7 +522,7 @@ function flashMicStatus(els, message) {
 function useHearIt() {
   if (!attempt) return;
   attempt.assisted = true;
-  const word = attempt.rawWords[attempt.matchedCount] || attempt.text;
+  const word = compoundWordAt(attempt, attempt.matchedCount) || attempt.text;
   const els = activeEls();
   speak(word, () => flashMicStatus(els, "Couldn't play audio in this browser"));
 }
@@ -504,7 +530,10 @@ function useHearIt() {
 // ---------- Tap-a-word-for-definition (both Levels and Practice) ----------
 // Tries Wiktionary's REST API first (reliable, genuine CORS support from
 // Wikimedia's own infrastructure), then falls back to a second free API.
-// Both can occasionally be unavailable, so failures are handled quietly.
+// Many sentence words are inflected forms ("remade", "studies", "walked"),
+// and dictionaries often just say "past tense of remake" for those — not
+// useful on its own, so if every candidate definition is just an inflection
+// pointer, this chases it back to the base word and shows its real meaning.
 const definitionCache = {};
 
 function stripHtml(html) {
@@ -513,41 +542,94 @@ function stripHtml(html) {
   return tmp.textContent || tmp.innerText || '';
 }
 
-async function fetchDefinition(rawWord) {
+function isInflectionText(text) {
+  return /\b(plural|past tense|past participle|present participle|third-person singular|comparative|superlative|alternative form|alternative spelling|obsolete form|archaic form|dialectal form|informal form|nonstandard form|inflection)\b[^.]*\bof\b/i.test(text);
+}
+
+function extractLemma(text) {
+  const m = text.match(/of\s+["'“]?([a-zA-Z][a-zA-Z'-]*)["'”]?\.?\s*$/i);
+  return m ? m[1] : null;
+}
+
+async function fetchDefinition(rawWord, depth) {
+  depth = depth || 0;
   const key = normalizeWord(rawWord);
   if (!key) return null;
-  if (Object.prototype.hasOwnProperty.call(definitionCache, key)) return definitionCache[key];
+  const cacheKey = key + ':' + depth;
+  if (Object.prototype.hasOwnProperty.call(definitionCache, cacheKey)) return definitionCache[cacheKey];
+
+  const candidates = [];
 
   try {
     const res = await fetch('https://en.wiktionary.org/api/rest_v1/page/definition/' + encodeURIComponent(key));
     if (res.ok) {
       const data = await res.json();
-      const entry = data && data.en && data.en[0];
-      const defRaw = entry && entry.definitions && entry.definitions[0] && entry.definitions[0].definition;
-      if (defRaw) {
-        const result = { pos: entry.partOfSpeech, def: stripHtml(defRaw) };
-        definitionCache[key] = result;
-        return result;
+      const entries = data && data.en;
+      if (entries) {
+        entries.forEach(entry => {
+          (entry.definitions || []).forEach(d => {
+            if (d && d.definition) candidates.push({ pos: entry.partOfSpeech, def: stripHtml(d.definition) });
+          });
+        });
       }
     }
   } catch (e) { /* try the fallback source below */ }
 
-  try {
-    const res2 = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(key));
-    if (res2.ok) {
-      const data2 = await res2.json();
-      const meaning = data2 && data2[0] && data2[0].meanings && data2[0].meanings[0];
-      const def2 = meaning && meaning.definitions && meaning.definitions[0] && meaning.definitions[0].definition;
-      if (def2) {
-        const result = { pos: meaning.partOfSpeech, def: def2 };
-        definitionCache[key] = result;
-        return result;
+  if (candidates.length === 0) {
+    try {
+      const res2 = await fetch('https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(key));
+      if (res2.ok) {
+        const data2 = await res2.json();
+        (data2 || []).forEach(entry => {
+          (entry.meanings || []).forEach(m => {
+            (m.definitions || []).forEach(d => {
+              if (d && d.definition) candidates.push({ pos: m.partOfSpeech, def: d.definition });
+            });
+          });
+        });
+      }
+    } catch (e) { /* both sources failed */ }
+  }
+
+  if (candidates.length === 0) {
+    definitionCache[cacheKey] = null;
+    return null;
+  }
+
+  const clean = candidates.find(c => !isInflectionText(c.def));
+  if (clean) {
+    definitionCache[cacheKey] = clean;
+    return clean;
+  }
+
+  // Every candidate was just an inflection pointer — chase it back to the
+  // real word so the person gets an actual meaning, not a dead end.
+  if (depth < 1) {
+    const lemma = extractLemma(candidates[0].def);
+    if (lemma && normalizeWord(lemma) !== key) {
+      const resolved = await fetchDefinition(lemma, depth + 1);
+      if (resolved) {
+        const combined = { pos: resolved.pos, def: resolved.def, inflectionNote: candidates[0].def };
+        definitionCache[cacheKey] = combined;
+        return combined;
       }
     }
-  } catch (e) { /* both sources failed */ }
+  }
 
-  definitionCache[key] = null;
-  return null;
+  definitionCache[cacheKey] = candidates[0];
+  return candidates[0];
+}
+
+function composeDefinitionText(result) {
+  if (!result) return "No definition found for this word.";
+  let text = '';
+  if (result.inflectionNote) {
+    const note = result.inflectionNote.charAt(0).toUpperCase() + result.inflectionNote.slice(1);
+    text += note + (note.endsWith('.') ? ' ' : '. ');
+  }
+  if (result.pos) text += `(${result.pos}) `;
+  text += result.def;
+  return text;
 }
 
 async function showDefinitionFor(rawWord, mode) {
@@ -559,9 +641,7 @@ async function showDefinitionFor(rawWord, mode) {
   panel.word.textContent = clean.toLowerCase();
   panel.text.textContent = 'Looking up definition…';
   const result = await fetchDefinition(clean);
-  panel.text.textContent = result
-    ? (result.pos ? '(' + result.pos + ') ' : '') + result.def
-    : "No definition found for this word.";
+  panel.text.textContent = composeDefinitionText(result);
 }
 
 // Tapping a word always shows its definition. In Practice, it also always
@@ -574,10 +654,10 @@ function handleWordTap(e, mode) {
   if (!span) return;
   const cardTextEl = mode === 'level' ? el.cardText : el.randomCardText;
   const idx = Array.from(cardTextEl.querySelectorAll('.word')).indexOf(span);
-  const rawWord = attempt.rawWords[idx];
-  if (!rawWord) return;
-  if (mode === 'practice') speak(rawWord); // must stay synchronous — do this before the async lookup
-  showDefinitionFor(rawWord, mode);
+  if (idx < 0 || !attempt.rawWords[idx]) return;
+  const word = compoundWordAt(attempt, idx);
+  if (mode === 'practice') speak(word); // must stay synchronous — do this before the async lookup
+  showDefinitionFor(word, mode);
 }
 
 function openLevel(n) {
@@ -695,10 +775,19 @@ function setupRecognition() {
     if (!recognizing || !attempt) return;
 
     let transcript = '';
+    let finalTranscript = '';
     for (let i = 0; i < event.results.length; i++) {
-      transcript += event.results[i][0].transcript + ' ';
+      const chunk = event.results[i][0].transcript;
+      transcript += chunk + ' ';
+      if (event.results[i].isFinal) finalTranscript += chunk + ' ';
     }
     const spoken = transcript.trim().split(/\s+/).map(normalizeWord).filter(Boolean);
+    // Words the recognizer has actually locked in, as opposed to its still-
+    // evolving best guess for whatever is currently being spoken. Only these
+    // are trustworthy enough to ever permanently record as "missed" — an
+    // interim guess is often wrong mid-word, especially for longer words,
+    // and shouldn't count against the speaker.
+    const finalWordCount = finalTranscript.trim().split(/\s+/).filter(Boolean).length;
 
     // Recompute word-by-word status fresh from the full transcript each time,
     // so interim results that get revised by the recognizer self-correct.
@@ -719,21 +808,30 @@ function setupRecognition() {
     }
     attempt.statuses = statuses;
     attempt.matchedCount = pointer;
+    attempt.finalWordCount = finalWordCount;
 
-    // Give the mismatched word a short grace period before showing it red —
-    // it might just be mid-word, not actually wrong yet.
+    // Give the mismatched word a grace period before showing it red — it
+    // might just be mid-word (an interim guess), not actually wrong yet.
     const displayStatuses = statuses.slice();
     if (pointer < target.length && statuses[pointer] === 'incorrect') {
       if (incorrectTimerIndex !== pointer) {
         clearIncorrectTimer();
         incorrectTimerIndex = pointer;
         incorrectTimer = setTimeout(() => {
-          if (attempt && attempt.matchedCount === pointer && attempt.statuses[pointer] === 'incorrect') {
+          // Only actually lock this in — and only ever record it to the
+          // missed-words bank — once the recognizer has FINALIZED speech
+          // past this word, not just floated an interim guess at it.
+          if (
+            attempt &&
+            attempt.matchedCount === pointer &&
+            attempt.statuses[pointer] === 'incorrect' &&
+            attempt.finalWordCount > pointer
+          ) {
             attempt.hasMistake = true;
             renderAttempt(attempt);
             const stillEls = activeEls();
             if (stillEls) stillEls.hearBtn.style.display = 'inline-flex';
-            recordMissedWord(target[pointer]);
+            recordMissedWord(compoundWordAt(attempt, pointer));
           }
           incorrectTimer = null;
           incorrectTimerIndex = null;
@@ -977,15 +1075,15 @@ function buildMissedRow(word) {
   const row = document.createElement('div');
   row.className = 'missed-word-row';
   row.innerHTML = `
-    <div class="missed-word-main">
+    <div class="missed-word-header">
       <div class="missed-word-text">${word}</div>
-      <div class="missed-word-def" style="display:none;"></div>
+      <div class="missed-word-actions">
+        <button class="mini-icon-btn" data-action="hear" aria-label="Hear word">🔊</button>
+        <button class="mini-icon-btn" data-action="define" aria-label="Show definition">Aa</button>
+        <button class="mini-icon-btn remove" data-action="remove" aria-label="Remove word">✕</button>
+      </div>
     </div>
-    <div class="missed-word-actions">
-      <button class="mini-icon-btn" data-action="hear" aria-label="Hear word">🔊</button>
-      <button class="mini-icon-btn" data-action="define" aria-label="Show definition">Aa</button>
-      <button class="mini-icon-btn remove" data-action="remove" aria-label="Remove word">✕</button>
-    </div>
+    <div class="missed-word-def" style="display:none;"></div>
   `;
   row.querySelector('[data-action="hear"]').addEventListener('click', () => speak(word));
   const defEl = row.querySelector('.missed-word-def');
@@ -994,9 +1092,7 @@ function buildMissedRow(word) {
     defEl.style.display = 'block';
     defEl.textContent = 'Looking up definition…';
     const result = await fetchDefinition(word);
-    defEl.textContent = result
-      ? (result.pos ? '(' + result.pos + ') ' : '') + result.def
-      : 'No definition found for this word.';
+    defEl.textContent = composeDefinitionText(result);
   });
   row.querySelector('[data-action="remove"]').addEventListener('click', () => {
     state.missedWords.delete(word);
@@ -1079,6 +1175,17 @@ el.autoPlayToggle.addEventListener('click', async () => {
   state.autoPlay = !state.autoPlay;
   renderAutoPlayToggle();
   await persistAutoPlay();
+});
+
+el.testSoundBtn.addEventListener('click', () => {
+  const original = el.testSoundSub.textContent;
+  el.testSoundSub.textContent = 'Playing a test sound…';
+  speak('This is a test of the sound.', () => {
+    el.testSoundSub.textContent = "Didn't hear anything? Check your phone isn't muted (the physical mute switch on iPhone silences this), that media volume is up, and that a text-to-speech voice is installed under your device's accessibility settings.";
+  });
+  setTimeout(() => {
+    if (el.testSoundSub.textContent === 'Playing a test sound…') el.testSoundSub.textContent = original;
+  }, 3500);
 });
 
 el.playBtn.addEventListener('click', () => {

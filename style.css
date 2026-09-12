@@ -524,18 +524,19 @@ button { font-family: inherit; }
 .missed-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 .missed-word-row {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 14px 16px;
 }
-.missed-word-main {
+.missed-word-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 .missed-word-text {
   font-size: 15px;
@@ -543,14 +544,17 @@ button { font-family: inherit; }
   color: var(--paper);
 }
 .missed-word-def {
-  margin-top: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--panel-border);
   font-size: 13px;
   color: #cfcbd8;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 .missed-word-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 .mini-icon-btn {
   width: 30px;
