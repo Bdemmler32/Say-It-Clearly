@@ -62,6 +62,11 @@ button { font-family: inherit; }
   padding: calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 14px calc(16px + env(safe-area-inset-left));
   flex-shrink: 0;
   border-bottom: 1px solid var(--panel-border);
+  /* Explicit solid color — the texture should never show here, regardless
+     of what's behind it. */
+  background-color: var(--bg-app);
+  position: relative;
+  z-index: 1;
 }
 
 .app-name {
@@ -121,8 +126,13 @@ button { font-family: inherit; }
   padding: 40px calc(0px + env(safe-area-inset-right)) 24px calc(0px + env(safe-area-inset-left));
   scroll-behavior: smooth;
   position: relative;
-  /* Elevation gradient: warm base camp -> cool, pale summit air */
-  background: linear-gradient(to top,
+  /* Elevation gradient: warm base camp -> cool, pale summit air, with the
+     faint texture layered on top. The map track itself is very tall (one
+     level per ~92px, hundreds of levels), so the texture layer uses
+     background-attachment: fixed — that sizes it relative to the actual
+     viewport instead of stretching one image across the entire scroll
+     height, and keeps it visually anchored as the gradient scrolls under it. */
+  background-image: url('icons/bg-texture.webp'), linear-gradient(to top,
     #2c3423 0%,
     #223226 16%,
     #1f2f34 34%,
@@ -132,6 +142,10 @@ button { font-family: inherit; }
     #433a4a 92%,
     #5b4e57 100%
   );
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center;
+  background-size: cover, 100% 100%;
+  background-attachment: fixed, scroll;
 }
 
 .map-track {
@@ -257,7 +271,12 @@ button { font-family: inherit; }
 .practice-overlay {
   position: fixed;
   inset: 0;
-  background: var(--bg-app);
+  background-color: var(--bg-app);
+  background-image: url('icons/bg-texture.webp');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
   display: flex;
   flex-direction: column;
   align-items: center;
