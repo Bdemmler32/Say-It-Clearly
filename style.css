@@ -21,6 +21,11 @@
   --text-dim: #8b889e;
 
   --font-card: 'Caveat', cursive;
+
+  /* Background texture intensity — change this one value to retune it
+     anywhere it appears (map screen, level/practice screens), no image
+     regeneration needed. */
+  --bg-texture-opacity: 0.1;
 }
 
 * { box-sizing: border-box; }
@@ -28,15 +33,29 @@ html, body { height: 100%; }
 
 body {
   margin: 0;
-  background-image: url('icons/bg-texture.webp'), radial-gradient(circle at 20% 10%, var(--bg-app-2), var(--bg-app) 65%);
-  background-repeat: no-repeat, no-repeat;
-  background-position: center, center;
-  /* Fill the screen on every size now (was contain/fit on mobile before). */
-  background-size: cover, cover;
-  background-attachment: fixed, fixed;
+  background: radial-gradient(circle at 20% 10%, var(--bg-app-2), var(--bg-app) 65%);
   font-family: 'Work Sans', sans-serif;
   color: var(--paper);
   overflow: hidden;
+}
+
+/* Shared recipe for the faint background texture layer, used behind the
+   map and behind the level/practice screens (never behind the navbar).
+   Pseudo-elements rather than plain background-images so opacity can be
+   tuned independently via --bg-texture-opacity without fading whatever
+   gradient/color sits underneath, or touching the image file itself. */
+.map-wrap::before,
+.practice-body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url('icons/bg-texture.webp');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  opacity: var(--bg-texture-opacity);
 }
 
 /* Respect notches, home indicators, and rounded corners on Android/iPhone */
@@ -126,13 +145,12 @@ button { font-family: inherit; }
   padding: 40px calc(0px + env(safe-area-inset-right)) 24px calc(0px + env(safe-area-inset-left));
   scroll-behavior: smooth;
   position: relative;
-  /* Elevation gradient: warm base camp -> cool, pale summit air, with the
-     faint texture layered on top. The map track itself is very tall (one
-     level per ~92px, hundreds of levels), so the texture layer uses
-     background-attachment: fixed — that sizes it relative to the actual
-     viewport instead of stretching one image across the entire scroll
-     height, and keeps it visually anchored as the gradient scrolls under it. */
-  background-image: url('icons/bg-texture.webp'), linear-gradient(to top,
+  /* Elevation gradient: warm base camp -> cool, pale summit air. The faint
+     texture is a separate ::before layer (see above) rather than another
+     background-image here, so its opacity is independently controllable —
+     and it stays a sensible, un-stretched size relative to the viewport
+     even though this track itself is very tall (hundreds of levels). */
+  background: linear-gradient(to top,
     #2c3423 0%,
     #223226 16%,
     #1f2f34 34%,
@@ -142,14 +160,11 @@ button { font-family: inherit; }
     #433a4a 92%,
     #5b4e57 100%
   );
-  background-repeat: no-repeat, no-repeat;
-  background-position: center, center;
-  background-size: cover, 100% 100%;
-  background-attachment: fixed, scroll;
 }
 
 .map-track {
   position: relative;
+  z-index: 1;
   width: 100%;
   margin: 0 auto;
   max-width: 480px;
@@ -306,12 +321,12 @@ button { font-family: inherit; }
   display: flex;
   flex-direction: column;
   align-items: center;
+  position: relative;
   padding: 20px calc(18px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left));
-  background-image: url('icons/bg-texture.webp');
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: cover;
-  background-attachment: fixed;
+}
+.practice-body > * {
+  position: relative;
+  z-index: 1;
 }
 
 .back-btn {
