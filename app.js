@@ -392,6 +392,17 @@ function compoundWordAt(a, idx) {
   return a.rawWords.slice(start, end + 1).join('-');
 }
 
+// The last target-word index in the same hyphen group as idx (idx itself
+// if it isn't hyphenated to the word after it). Used so the matcher can
+// accept a hyphenated compound as either two separate spoken words OR one
+// fused word — natural speech often runs them together ("low-roofed"
+// spoken fluidly can get transcribed as a single "lowroofed" token).
+function hyphenGroupEnd(a, idx) {
+  let end = idx;
+  while (end < a.seps.length - 1 && a.seps[end] === '-') end++;
+  return end;
+}
+
 function buildAttempt(text, mode, extra) {
   const { rawWords, seps } = tokenizePhrase(text);
   return Object.assign({
@@ -620,12 +631,26 @@ function composeDefinitionText(result) {
   return text;
 }
 
+const DEFINITION_HINTS = {
+  level: '💡 Tap any word above for its definition.',
+  practice: '💡 Tap any word to hear it and see its definition.',
+};
+
+function resetDefinitionHint(mode) {
+  const panel = mode === 'level'
+    ? { word: el.definitionWord, text: el.definitionText }
+    : { word: el.randomDefinitionWord, text: el.randomDefinitionText };
+  panel.word.textContent = '';
+  panel.text.textContent = DEFINITION_HINTS[mode];
+  panel.text.classList.add('hint');
+}
+
 async function showDefinitionFor(rawWord, mode) {
   const panel = mode === 'level'
     ? { box: el.definitionPanel, word: el.definitionWord, text: el.definitionText }
     : { box: el.randomDefinitionPanel, word: el.randomDefinitionWord, text: el.randomDefinitionText };
   const clean = rawWord.replace(/^[^a-zA-Z']+|[^a-zA-Z']+$/g, '');
-  panel.box.style.display = 'block';
+  panel.text.classList.remove('hint');
   panel.word.textContent = clean.toLowerCase();
   panel.text.textContent = 'Looking up definition…';
   const result = await fetchDefinition(clean);
@@ -661,11 +686,12 @@ function openLevel(n) {
   clearIncorrectTimer();
   attempt = buildAttempt(phrase.text, 'level', { levelIndex: n });
   renderAttempt(attempt);
+  userPaused = false;
 
   el.resultBanner.style.display = 'none';
   el.nextBtn.style.display = 'none';
   el.hearBtn.style.display = 'none';
-  el.definitionPanel.style.display = 'none';
+  resetDefinitionHint('level');
   el.skipBtn.style.display = state.levelStatus[n] ? 'none' : 'inline-block';
   updateSkipButton();
   el.micStatus.textContent = 'Tap the mic and say the phrase';
@@ -675,6 +701,7 @@ function openLevel(n) {
 }
 
 function closeLevel() {
+  userPaused = true;
   if (recognizing) stopRecognition();
   clearIncorrectTimer();
   state.openLevel = null;
@@ -762,28 +789,39 @@ function setupRecognition() {
     // which previously caused a level to be marked complete twice.
     if (!recognizing || !attempt) return;
 
-    let transcript = '';
     let finalTranscript = '';
     for (let i = 0; i < event.results.length; i++) {
-      const chunk = event.results[i][0].transcript;
-      transcript += chunk + ' ';
-      if (event.results[i].isFinal) finalTranscript += chunk + ' ';
+      if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
     }
-    const spoken = transcript.trim().split(/\s+/).map(normalizeWord).filter(Boolean);
-    // Words the recognizer has actually locked in, as opposed to its still-
-    // evolving best guess for whatever is currently being spoken. Only these
-    // are trustworthy enough to ever permanently record as "missed" — an
-    // interim guess is often wrong mid-word, especially for longer words,
-    // and shouldn't count against the speaker.
-    const finalWordCount = finalTranscript.trim().split(/\s+/).filter(Boolean).length;
-
-    // Recompute word-by-word status fresh from the full transcript each time,
-    // so interim results that get revised by the recognizer self-correct.
+    // Authoritative progress is based ONLY on finalized speech, never on
+    // interim guesses. Interim results can be silently revised by the
+    // recognizer's language model as more audio arrives — which was
+    // letting a real mispronunciation get quietly "fixed" once later
+    // words gave it more context, and the following words would then
+    // wrongly turn green too. Waiting for isFinal fixes both that and
+    // the earlier premature-red-flash issue, since a word can't be
+    // judged at all until the recognizer itself is done with it.
+    const finalSpoken = finalTranscript.trim().split(/\s+/).map(normalizeWord).filter(Boolean);
     const target = attempt.targetWords;
     const statuses = target.map(() => 'pending');
     let pointer = 0;
-    for (const w of spoken) {
+    for (const w of finalSpoken) {
       if (pointer >= target.length) break;
+
+      // Hyphenated compounds ("low-roofed") are frequently transcribed as
+      // one fused word when spoken naturally ("lowroofed"), not as two
+      // separate words. Accept that as satisfying both halves at once, on
+      // top of the normal two-separate-words case below.
+      const groupEnd = hyphenGroupEnd(attempt, pointer);
+      if (groupEnd > pointer) {
+        const fused = target.slice(pointer, groupEnd + 1).join('');
+        if (wordsRoughlyMatch(w, fused)) {
+          for (let k = pointer; k <= groupEnd; k++) statuses[k] = 'correct';
+          pointer = groupEnd + 1;
+          continue;
+        }
+      }
+
       if (wordsRoughlyMatch(w, target[pointer])) {
         statuses[pointer] = 'correct';
         pointer++;
@@ -791,12 +829,8 @@ function setupRecognition() {
         statuses[pointer] = 'incorrect';
       }
     }
-    if (pointer < target.length && statuses[pointer] !== 'incorrect') {
-      statuses[pointer] = 'current';
-    }
     attempt.statuses = statuses;
     attempt.matchedCount = pointer;
-    attempt.finalWordCount = finalWordCount;
 
     // Give the mismatched word a grace period before showing it red — it
     // might just be mid-word (an interim guess), not actually wrong yet.
@@ -806,15 +840,7 @@ function setupRecognition() {
         clearIncorrectTimer();
         incorrectTimerIndex = pointer;
         incorrectTimer = setTimeout(() => {
-          // Only actually lock this in as a mistake (red + "Hear it")
-          // once the recognizer has FINALIZED speech past this word, not
-          // just floated an interim guess at it.
-          if (
-            attempt &&
-            attempt.matchedCount === pointer &&
-            attempt.statuses[pointer] === 'incorrect' &&
-            attempt.finalWordCount > pointer
-          ) {
+          if (attempt && attempt.matchedCount === pointer && attempt.statuses[pointer] === 'incorrect') {
             attempt.hasMistake = true;
             renderAttempt(attempt);
             const stillEls = activeEls();
@@ -824,9 +850,10 @@ function setupRecognition() {
           incorrectTimerIndex = null;
         }, INCORRECT_DELAY_MS);
       }
-      displayStatuses[pointer] = 'current';
+      displayStatuses[pointer] = 'current'; // soften to yellow until the grace period confirms it
     } else {
       clearIncorrectTimer();
+      if (pointer < target.length) displayStatuses[pointer] = 'current';
     }
     renderAttempt(attempt, displayStatuses);
 
@@ -842,15 +869,22 @@ function setupRecognition() {
   };
 
   recognition.onerror = (event) => {
+    const permissionIssue = event.error === 'not-allowed' || event.error === 'permission-denied' ||
+      event.error === 'audio-capture' || event.error === 'service-not-allowed';
     stopRecognition();
     const els = activeEls();
     if (!els) return;
-    if (event.error === 'no-speech') {
-      els.micStatus.textContent = "Didn't catch that — tap the mic and try again";
-    } else if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+    if (permissionIssue) {
       els.micStatus.textContent = 'Microphone access is blocked — enable it in your browser settings';
+      return;
+    }
+    // "No speech" and similar recoverable hiccups shouldn't require the
+    // person to tap the mic again — just pick back up automatically so it
+    // feels like the mic stayed on for the whole level.
+    if (!userPaused) {
+      maybeAutoResume();
     } else {
-      els.micStatus.textContent = 'Something went wrong — tap the mic to retry';
+      els.micStatus.textContent = "Didn't catch that — tap the mic and try again";
     }
   };
 
@@ -860,26 +894,57 @@ function setupRecognition() {
     const els = activeEls();
     if (!els) return;
     els.micBtn.classList.remove('listening');
-    if (attempt) {
-      if (attempt.matchedCount >= attempt.targetWords.length) {
-        els.micStatus.textContent = '';
-      } else if (attempt.matchedCount > 0) {
-        els.micStatus.textContent = 'Not quite — tap the mic to try again';
-      } else {
-        els.micStatus.textContent = 'Mic off — tap the mic to try again';
-      }
+    if (attempt && attempt.matchedCount >= attempt.targetWords.length) {
+      els.micStatus.textContent = '';
+      return;
+    }
+    if (!userPaused) {
+      maybeAutoResume();
+      return;
+    }
+    if (attempt && attempt.matchedCount > 0) {
+      els.micStatus.textContent = 'Mic off — tap to try again';
+    } else {
+      els.micStatus.textContent = 'Mic off — tap the mic to try again';
     }
   };
 }
 
+// True only while the person has explicitly paused the mic themselves —
+// distinguishes an intentional stop from the recognizer just timing out,
+// so we know when it's safe to auto-resume without asking.
+let userPaused = false;
+
+function isAttemptScreenOpen() {
+  return el.practiceOverlay.classList.contains('open') || el.randomOverlay.classList.contains('open');
+}
+
+// Keeps the mic effectively "on" for the whole level/card: if listening
+// stops for any reason other than the person choosing to pause it (or
+// finishing successfully), pick back up automatically instead of making
+// them tap the button again — and never wipe their progress when doing so.
+function maybeAutoResume() {
+  if (userPaused || !attempt || !recognition) return;
+  if (attempt.matchedCount >= attempt.targetWords.length) return;
+  setTimeout(() => {
+    if (userPaused || !attempt || !recognition || !isAttemptScreenOpen()) return;
+    if (attempt.matchedCount >= attempt.targetWords.length) return;
+    if (recognizing) return;
+    try {
+      recognition.start();
+      recognizing = true;
+      const els = activeEls();
+      if (els) {
+        els.micBtn.classList.add('listening');
+        els.micStatus.textContent = 'Listening…';
+      }
+    } catch (e) { /* already starting — fine */ }
+  }, 250);
+}
+
 function startRecognition() {
   if (!recognition || !attempt) return;
-  clearIncorrectTimer();
-  attempt.matchedCount = 0;
-  attempt.statuses = freshWordStatuses(attempt.rawWords.length);
-  attempt.hasMistake = false;
-  attempt.assisted = false;
-  renderAttempt(attempt);
+  userPaused = false;
   const els = activeEls();
   els.resultBanner.style.display = 'none';
   els.hearBtn.style.display = 'none';
@@ -918,16 +983,17 @@ function stopRecognition() {
 
 function handleMicToggle() {
   if (recognizing) {
+    userPaused = true;
     stopRecognition();
   } else {
-    startRecognition();
+    startRecognition(); // sets userPaused = false internally
   }
 }
 
 el.micBtn.addEventListener('click', handleMicToggle);
 el.hearBtn.addEventListener('click', useHearIt);
 el.cardText.addEventListener('click', (e) => handleWordTap(e, 'level'));
-el.definitionClose.addEventListener('click', () => { el.definitionPanel.style.display = 'none'; });
+el.definitionClose.addEventListener('click', () => resetDefinitionHint('level'));
 
 el.skipBtn.addEventListener('click', skipLevel);
 el.backBtn.addEventListener('click', closeLevel);
@@ -1005,6 +1071,7 @@ function openRandomPractice() {
 function loadRandomCard() {
   if (recognizing) stopRecognition();
   clearIncorrectTimer();
+  userPaused = false;
   const phrase = randomOrder[randomIndex];
   el.randomCard.className = 'card difficulty-' + phrase.difficulty;
   el.randomFocusTag.textContent = phrase.focus;
@@ -1016,7 +1083,7 @@ function loadRandomCard() {
   renderAttempt(attempt);
   el.randomResultBanner.style.display = 'none';
   el.randomHearBtn.style.display = 'none';
-  el.randomDefinitionPanel.style.display = 'none';
+  resetDefinitionHint('practice');
   el.randomMicStatus.textContent = 'Tap the mic and say the phrase';
   el.randomMicBtn.classList.remove('listening');
 }
@@ -1041,6 +1108,7 @@ function completeRandomCard() {
 }
 
 function closeRandomPractice() {
+  userPaused = true;
   if (recognizing) stopRecognition();
   clearIncorrectTimer();
   attempt = null;
@@ -1053,7 +1121,7 @@ el.randomBackBtn.addEventListener('click', closeRandomPractice);
 el.randomMicBtn.addEventListener('click', handleMicToggle);
 el.randomHearBtn.addEventListener('click', useHearIt);
 el.randomCardText.addEventListener('click', (e) => handleWordTap(e, 'practice'));
-el.randomDefinitionClose.addEventListener('click', () => { el.randomDefinitionPanel.style.display = 'none'; });
+el.randomDefinitionClose.addEventListener('click', () => resetDefinitionHint('practice'));
 el.randomPrevBtn.addEventListener('click', () => {
   randomIndex = (randomIndex - 1 + randomOrder.length) % randomOrder.length;
   loadRandomCard();

@@ -93,10 +93,27 @@ doesn't support speech recognition, the mic is hidden and a message
 explains it (you can still use the point-based skip on Levels, or just
 browse cards with the arrows in Practice).
 
-Hyphenated words (e.g. "low-roofed") are matched as their separate
-spoken parts, not as one glued-together word, since that's how people
-actually say them — they still render as a single hyphenated word on
-the card, but each half can be marked correct/incorrect independently.
+**Correctness is based only on finalized speech**, not the recognizer's
+still-evolving interim guesses. Interim results can get silently
+revised as more audio arrives — which was letting a real
+mispronunciation get quietly "corrected away" once later words gave it
+more context, incorrectly turning subsequent words green too. Waiting
+for the recognizer to actually finalize each word fixes that: a
+mistake on one word blocks every word after it from being credited
+until that word is said correctly.
+
+**The mic stays on for the whole level or card.** If listening stops
+for any reason other than you tapping the mic to pause it yourself
+(a timeout, a brief recoverable hiccup), it picks back up automatically
+without losing your progress — you never have to restart the phrase
+from the beginning just because you paused to think or got a word
+wrong.
+
+Hyphenated words (e.g. "low-roofed") are matched however you actually
+say them — as two separate words, or as one fused word if you say it
+fluidly (which is common and how natural speech usually comes out) —
+either way it's accepted, and it still renders as a single hyphenated
+word on the card with each half colored independently.
 
 ### Pronunciation help ("Hear it")
 
