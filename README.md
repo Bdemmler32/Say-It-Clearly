@@ -5,6 +5,12 @@ level 1 at the bottom, harder levels as you climb. No keyboard input
 anywhere; you complete a level by speaking the phrase into your device's
 microphone.
 
+## Icons
+
+All icons are [Font Awesome Free](https://fontawesome.com/) (loaded via
+CDN in `index.html`), not emoji — consistent rendering across every
+device instead of relying on the OS's own emoji font.
+
 ## Files
 
 - `index.html` — page shell
@@ -164,7 +170,12 @@ if that's unavailable. Many sentence words are inflected forms
 ("remade," "studies"), and dictionaries often just say "past tense of
 remake" for those — when every candidate definition is just an
 inflection pointer like that, the lookup chases it back to the real
-word and shows its actual meaning instead. Word text has native
+word and shows its actual meaning instead. Common parts of speech
+(article, noun, verb, adjective, etc.) are also preferred over obscure
+ones that technically exist on the same dictionary page — Wiktionary,
+for instance, lists "the" as both the everyday article and an
+unrelated ISO 639-3 language code filed under "Symbol," and without
+this preference the wrong one could win. Word text has native
 text-selection disabled so your phone's built-in "Look Up" popup
 doesn't fire and conflict with this. Hyphenated words ("low-roofed")
 are spoken and defined as the whole compound, not as orphaned halves.

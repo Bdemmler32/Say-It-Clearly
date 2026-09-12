@@ -289,7 +289,7 @@ function renderMap() {
 
     if (n > unlocked) {
       node.classList.add('locked');
-      node.textContent = '🔒';
+      node.innerHTML = '<i class="fa-solid fa-lock"></i>';
     } else if (status === 'completed') {
       node.classList.add('completed');
     } else if (status === 'skipped') {
@@ -307,7 +307,7 @@ function renderMap() {
     if (MILESTONES[n]) {
       const label = document.createElement('div');
       label.className = 'milestone-label';
-      label.innerHTML = `<span class="flag">🚩</span> ${MILESTONES[n]}`;
+      label.innerHTML = `<i class="fa-solid fa-flag"></i> ${MILESTONES[n]}`;
       wrap.appendChild(label);
     }
 
@@ -655,6 +655,21 @@ async function fetchDefinition(rawWord, depth) {
     return null;
   }
 
+  // Prefer ordinary parts of speech over obscure ones that technically
+  // exist on the page but aren't what someone tapping the word wants —
+  // e.g. Wiktionary lists "the" as both the common article AND an
+  // (unrelated) ISO 639-3 language code, filed under "Symbol." Without
+  // this, whichever one happened to appear first in the API response won.
+  const COMMON_POS = ['article', 'determiner', 'pronoun', 'noun', 'proper noun',
+    'verb', 'adjective', 'adverb', 'preposition', 'conjunction', 'interjection', 'numeral'];
+  const commonClean = candidates.find(c =>
+    !isInflectionText(c.def) && c.pos && COMMON_POS.includes(c.pos.toLowerCase())
+  );
+  if (commonClean) {
+    definitionCache[cacheKey] = commonClean;
+    return commonClean;
+  }
+
   const clean = candidates.find(c => !isInflectionText(c.def));
   if (clean) {
     definitionCache[cacheKey] = clean;
@@ -692,8 +707,8 @@ function composeDefinitionText(result) {
 }
 
 const DEFINITION_HINTS = {
-  level: '💡 Tap any word above for its definition.',
-  practice: '💡 Tap any word to hear it and see its definition.',
+  level: 'Tap any word above for its definition.',
+  practice: 'Tap any word to hear it and see its definition.',
 };
 
 function resetDefinitionHint(mode) {
@@ -703,9 +718,10 @@ function resetDefinitionHint(mode) {
   panel.word.textContent = '';
   // In Practice, if "Hear It" is turned off, reuse the exact same hint
   // text as Levels — no point mentioning tap-to-hear when it's disabled.
-  panel.text.textContent = (mode === 'practice' && !state.practiceHearEnabled)
+  const hintText = (mode === 'practice' && !state.practiceHearEnabled)
     ? DEFINITION_HINTS.level
     : DEFINITION_HINTS[mode];
+  panel.text.innerHTML = '<i class="fa-solid fa-lightbulb"></i> ' + hintText;
   panel.text.classList.add('hint');
 }
 
@@ -1274,17 +1290,22 @@ el.practiceHearToggle.addEventListener('click', async () => {
 });
 
 el.testSoundBtn.addEventListener('click', () => {
-  const originalLabel = el.testSoundBtn.textContent;
-  el.testSoundBtn.textContent = '🔊 Playing…';
+  const originalHTML = el.testSoundBtn.innerHTML;
+  let stillPlaying = true;
+  el.testSoundBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i> Playing…';
   speak('This is a test of the sound.', () => {
-    el.testSoundBtn.textContent = originalLabel;
+    stillPlaying = false;
+    el.testSoundBtn.innerHTML = originalHTML;
     const voiceNote = cachedVoices.length === 0
       ? " This browser reports zero text-to-speech voices available — that's almost certainly why (a Chrome/Android compatibility gap, separate from your device's TTS setting)."
       : '';
-    el.testSoundSub.textContent = "No sound?" + voiceNote + " On Android Chrome, also check the site's Sound permission under ⋮ menu → Site settings. On iPhone, check the physical mute switch on the side.";
+    el.testSoundSub.textContent = "No sound?" + voiceNote + " On Android Chrome, also check the site's Sound permission under the ⋮ menu, Site settings. On iPhone, check the physical mute switch on the side.";
   });
   setTimeout(() => {
-    if (el.testSoundBtn.textContent === '🔊 Playing…') el.testSoundBtn.textContent = originalLabel;
+    if (stillPlaying) {
+      stillPlaying = false;
+      el.testSoundBtn.innerHTML = originalHTML;
+    }
   }, 2500);
 });
 
