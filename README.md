@@ -123,6 +123,20 @@ since that's what speech recognition actually transcribes them as —
 without this, the accent mark was being deleted outright instead of
 converted, permanently breaking the match on any word containing one.
 
+### Homophones and alternate spellings
+
+Some words have more than one valid spelling that's pronounced exactly
+the same — "lachrymose"/"lacrimose," US/UK pairs like "skeptic"/
+"sceptic" or "somber"/"sombre" — and speech recognition's language
+model will sometimes transcribe the "other" one even when you said the
+printed word perfectly. This isn't a bug in the matching code the way
+the hyphen/accent issues were; it's a genuine ambiguity in English
+itself that no amount of code can fully eliminate. The fix is a
+`WORD_VARIANT_GROUPS` list near the top of `app.js` — each entry is a
+small group of interchangeable spellings, and any of them are accepted
+for that word. If you run into another one, just add a group like
+`['word', 'alternateSpelling']`; no other code needs to change.
+
 ### Pronunciation help ("Hear it")
 
 If a word comes back marked wrong, a "🔊 Hear it" button appears and

@@ -370,6 +370,43 @@ function wordsRoughlyMatch(a, b) {
   return false;
 }
 
+// Known homophones / equally-valid alternate spellings — pairs (or small
+// groups) of words that sound identical but a speech recognizer's language
+// model might transcribe as the "other" one, especially when its etymology
+// is contested (e.g. "lachrymose" vs "lacrimose") or it's a US/UK regional
+// spelling ("somber" vs "sombre"). Without this, saying the word perfectly
+// could still register as wrong forever, since the target text only ever
+// listed one spelling. Add more groups here as they turn up — no need to
+// touch the matching logic itself.
+const WORD_VARIANT_GROUPS = [
+  ['lachrymose', 'lacrimose'],
+  ['somber', 'sombre'],
+  ['signaled', 'signalled'],
+  ['skeptic', 'sceptic'],
+  ['skeptical', 'sceptical'],
+  ['encyclopedic', 'encyclopaedic'],
+  ['reflection', 'reflexion'],
+];
+const WORD_VARIANTS = {};
+WORD_VARIANT_GROUPS.forEach(group => {
+  group.forEach(word => {
+    WORD_VARIANTS[word] = group.filter(w => w !== word);
+  });
+});
+
+// Use this instead of wordsRoughlyMatch directly when comparing spoken
+// audio against a specific target word — it also accepts any known
+// variant spelling of that target.
+function matchesTarget(spoken, target) {
+  if (wordsRoughlyMatch(spoken, target)) return true;
+  const variants = WORD_VARIANTS[target];
+  if (!variants) return false;
+  for (const v of variants) {
+    if (wordsRoughlyMatch(spoken, v)) return true;
+  }
+  return false;
+}
+
 // Split on spaces AND hyphens, but remember which separator followed each
 // word so hyphenated compounds ("low-roofed") render as two independently
 // highlightable words with no gap between them — and, crucially, are
@@ -845,14 +882,14 @@ function setupRecognition() {
       const groupEnd = hyphenGroupEnd(attempt, pointer);
       if (groupEnd > pointer) {
         const fused = target.slice(pointer, groupEnd + 1).join('');
-        if (wordsRoughlyMatch(w, fused)) {
+        if (matchesTarget(w, fused)) {
           for (let k = pointer; k <= groupEnd; k++) statuses[k] = 'correct';
           pointer = groupEnd + 1;
           continue;
         }
       }
 
-      if (wordsRoughlyMatch(w, target[pointer])) {
+      if (matchesTarget(w, target[pointer])) {
         statuses[pointer] = 'correct';
         pointer++;
       } else {
